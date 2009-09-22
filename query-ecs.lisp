@@ -2,15 +2,15 @@
 ;;; this file contains functions for making queries to the amazon
 ;;; e-commerce service.
 
-(defun item-lookup (&key response-group search-index
+(defun item-lookup (&key item-id response-group search-index
 		    condition delivery-method id-type merchant-id offer-page
 		    related-item-page relationship-type review-page review-sort tag-page tag-sort
 		    tags-per-page variation-page ispu-postal-code)
   (let* ((uri
 	  (generate-uri :response-group response-group
-			:operation :item-search
+			:operation :item-lookup
 			:parameters (bind-and-parameterize
-				     search-index condition delivery-method id-type merchant-id offer-page
+				     item-id search-index condition delivery-method id-type merchant-id offer-page
 				     related-item-page relationship-type review-page review-sort tag-page tag-sort
 				     tags-per-page variation-page
 				     (ispu-postal-code "ISPUPostalCode"))))

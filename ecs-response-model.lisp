@@ -189,6 +189,10 @@
 (defclass item-lookup-request ()
   ((item-id :accessor request-item-id :initform nil :initarg :item-id
 	       :subelement (simple-text-element :alias "ItemId"))
+   (id-type :initform nil :accessor request-id-type
+	    :subelement (simple-text-element :alias "IdType"))
+   (search-index :initform nil :accessor request-search-index
+	    :subelement (simple-text-element :alias "SearchIndex"))
    (response-groups :accessor response-groups :initform () :initarg :response-groups
 	       :subelement (simple-text-element :alias "ResponseGroup" :multiple t))
    (merchant-id :accessor merchant-id :initform () :initarg :merchant-id
