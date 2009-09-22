@@ -2,74 +2,59 @@
 ;;; this file contains functions for making queries to the amazon
 ;;; e-commerce service.
 
-(defun base-ecs-url (language-code)
-  (declare (ignore language-code))
-  "http://webservices.amazon.com/onca/xml?Service=AWSECommerceService")
+(defun item-lookup (&key response-group search-index
+		    condition delivery-method id-type merchant-id offer-page
+		    related-item-page relationship-type review-page review-sort tag-page tag-sort
+		    tags-per-page variation-page ispu-postal-code)
+  (let* ((uri
+	  (generate-uri :response-group response-group
+			:operation :item-search
+			:parameters (bind-and-parameterize
+				     search-index condition delivery-method id-type merchant-id offer-page
+				     related-item-page relationship-type review-page review-sort tag-page tag-sort
+				     tags-per-page variation-page
+				     (ispu-postal-code "ISPUPostalCode"))))
+	 (parsed-query
+	  (request-and-parse uri
+			     #'(lambda (s)
+				 (xml-mop:parse-xml-stream s (list (find-class 'item-lookup-response)))))))
+    (values (response-items (first parsed-query))
+	    (first parsed-query))))
 
-(defun join-string-list (string-list &optional (delimiter ""))
-  "Concatenates a list of strings and puts spaces between the elements."
-  (let ((control-str (concatenate 'string "~{~A~^" delimiter "~}")))
-    (format nil control-str string-list)))
+(defun item-search (&key search-index actor artists audience-rating author availability brand browse-node
+		    city composer condition conductor cuisine delivery-method director
+		    disable-parent-asin-substitution ispu-postal-code item-page keywords manufacturer
+		    maximum-price merchant-id minimum-price music-label neighborhood orchestra
+		    postal-code power publisher related-item-page relationship-type release-date
+		    review-sort sort state tag-page tag-sort tags-per-page text-stream title
+		    response-group)
 
-(defun hyphenated->camelized (hyphen-word)
-  "Returns a camelized version of the hyphenated string of words."
-  (let ((words (cl-ppcre:split "-" hyphen-word)))
-    (join-string-list
-     (mapcar #'string-capitalize words))))
-
-(defun amazon-query-component (name value)
-  (format nil "~A=~A" (hyphenated->camelized (string name)) value))
-
-(defmacro urlize-keys (url-key-forms)
-  `(list 
-    ,@(mapcar
-       #'(lambda (url-key-form)
-	   (let* ((true-url-key (if (listp url-key-form) (second url-key-form) url-key-form))
-		  (url-key-sym (if (listp url-key-form) (first url-key-form) url-key-form))
-		  (url-key-value (intern (string url-key-sym))))
-	     `(if ,url-key-value
-	       ,(list 'amazon-query-component true-url-key url-key-value)
-	       nil)))
-       url-key-forms)))
-
-(defun generate-ecs-url (&key aws-key associate-id operation
-			 response-group item-id keywords search-index
-			 merchant-id condition delivery-method id-type
-			 ispu-postal-code version item-page)
-  "Generates an ECS url with the supplied parameters."
-  (join-string-list
-   (list (base-ecs-url "en")
-	 (join-string-list
-	  (remove-if #'null 
-		     (urlize-keys
-		      (:search-index :operation :keywords :item-id :version
-				     :response-group :merchant-id :id-type :condition :delivery-method
-                                     :item-page
-				     (:ispu-postal-code :i-s-p-u-postal-code)
-				     (:aws-key :a-w-s-access-key-id)
-				     (:associate-id :associate-tag))))
-	  "&")) "&"))
-
-(defun parse-response-stream (response-stream)
-  (first
-   (xml-mop::parse-xml-stream response-stream
-			      (list (find-class 'item-lookup-response)
-				    (find-class 'item-search-response)))))
+  (let* ((uri
+	 (generate-uri :response-group response-group
+		       :operation :item-search
+		       :parameters (bind-and-parameterize
+				    search-index actor artists audience-rating author availability brand browse-node
+				    city composer condition conductor cuisine delivery-method director
+				    disable-parent-asin-substitution  item-page keywords manufacturer
+				    maximum-price merchant-id minimum-price music-label neighborhood orchestra
+				    postal-code power publisher related-item-page relationship-type release-date
+				    review-sort sort state tag-page tag-sort tags-per-page text-stream title
+				    (ispu-postal-code "ISPUPostalCode"))))
+	 (parsed-query
+	  (request-and-parse uri
+			     #'(lambda (s)
+				 (xml-mop:parse-xml-stream s (list (find-class 'item-search-response)))))))
+    (values (response-items (first parsed-query))
+	    (first parsed-query))))
 
 
-(defun perform-amazon-search (query-url)
-  (parse-response-stream
-   (drakma:http-request query-url :want-stream t)))
+;(find-class 'item-lookup-response)
 
-(defun perform-amazon-request (query-url)
-  (parse-response-stream
-   (dotimes (i 5)
-     (handler-case
-	 (return (drakma:http-request query-url :want-stream t))
-       (error ()
-	 (format t "Error with request, retrying ~Ath time~%" i))))))
-
-
+(defun request-and-parse (uri parse-fn)
+  (let ((stream (drakma:http-request uri :want-stream t)))
+    (unwind-protect (funcall parse-fn stream)
+      (close stream))))
+							     
 
 (defgeneric official-amazon-offer? (offer)
   (:documentation "Returns whether or not the offer is an official amazon offer."))
@@ -77,8 +62,10 @@
 (defmethod official-amazon-offer? ((offer offer))
   (let ((merchant (offer-merchant offer)))
     (and merchant
-	 (string-equal (merchant-id merchant)
-		       "ATVPDKIKX0DER"))))
+	 (or (string-equal (merchant-id merchant)
+			   "ATVPDKIKX0DER")
+	     (string-equal (merchant-id merchant)
+			   "Amazon")))))
 
 (defgeneric item-official-amazon-offer  (item)
   (:documentation "Returns the first official amazon offer for the item."))

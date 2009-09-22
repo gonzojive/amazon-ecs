@@ -6,41 +6,42 @@
 (defclass numerical-text-element ()
   ()
   (:metaclass element-class)
-  (:documentation "An element that has text that reduces to a number"))
+  (:documentation "An element that has text that reduces to a number."))
+
 (defmethod xml-mop:element-value ((element numerical-text-element))
   (parse-number:parse-number (xml-mop:element-text element)))
 
+;; simple text element is one that is xml-evaluated 
 (defclass simple-text-element () () (:metaclass element-class))
+
 (defmethod xml-mop:element-value ((element simple-text-element))
   (xml-mop:element-text element))
 
-(defun my-parse-date (ugly-date-string)
-  (labels ((parse-single-year (ugly-date-string)
-	     (cl-ppcre:register-groups-bind
-		 (single-year-string)
-		 ("^([0-9]{4,4})$" ugly-date-string)
-	       (if single-year-string
-		   (encode-universal-time 0 0 0 1 1 (parse-number:parse-number single-year-string))
-		   nil))))
-    (handler-case   (parse-time ugly-date-string)
-      (type-error ()
-	(let ((second-attempt (parse-single-year ugly-date-string)))
-	  (if second-attempt
-	      second-attempt
-	      (error "failed to parse date ~A" ugly-date-string)))))))
-
+;; an xml element that xml-evaluates to a date
 (defclass date-element () () (:metaclass element-class))
+
 (defmethod xml-mop:element-value ((element date-element))
   (my-parse-date (element-text element)))
 
+;; a boolean element that avaluates to T r NIL
 (defclass yes-no-element (simple-text-element) () (:metaclass element-class))
 
+(defmethod xml-mop:element-value ((element yes-no-element))
+  (let ((text (xml-mop:element-text element)))
+    (cond
+      ((member text '("True" "1") :test #'string-equal) t)
+      ((member text '("False" "0") :test #'string-equal) nil))))
+
+
+;; some sort of numerical element with units
 (defclass numerical-measurement-element (numerical-text-element)
   ((units :attribute "Units" :accessor distance-units :initform ""))
   (:metaclass element-class))
 
-(defclass digital-distance-element (numerical-measurement-element) () (:metaclass element-class))
+;(defclass digital-distance-element (numerical-measurement-element) () (:metaclass element-class))
+
 (defclass distance-element (numerical-measurement-element) () (:metaclass element-class))
+
 (defclass weight-element (numerical-measurement-element) () (:metaclass element-class))
 
 (defclass key-value-element ()
@@ -59,6 +60,10 @@
   (:metaclass element-class)
   (:documentation "Parent of all elements that contain price information"))
 
+(defmethod print-object ((obj price-element) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (write-sequence (price-formatted obj) stream)))
+
 (defgeneric price-in-cents (price))
 (defgeneric price-in-dollars (price))
 (defgeneric price-as-string (price))
@@ -71,8 +76,8 @@
 
 (defclass image-element ()
   ((url :subelement (simple-text-element :alias "URL") :accessor image-url :initform "")
-   (width :subelement (digital-distance-element :alias "Width") :accessor image-width :initform "")
-   (height :subelement (digital-distance-element :alias "Height") :accessor image-height :initform ""))
+   (width :subelement (distance-element :alias "Width") :accessor image-width :initform "")
+   (height :subelement (distance-element :alias "Height") :accessor image-height :initform ""))
   (:metaclass element-class))
 
 ;;; Root AWS responses
@@ -216,30 +221,83 @@
    (small-image :initform nil :subelement (image-element :alias "SmallImage") :accessor item-small-image)
    (medium-image :initform nil :subelement (image-element :alias "MediumImage") :accessor item-medium-image)
    (image-sets :subelement (image-set-collection :alias "ImageSets") :accessor item-image-sets)
-   (alternate-versions :accessor alternate-versions :initform nil :initarg :alternate-versions)
+   (alternate-versions :accessor alternate-versions :initform nil :initarg :alternate-versions
+		       :subelement (alternate-versions :alias "AlternateVersions"))
+   (item-links :accessor item-links :initform nil :initarg :item-links
+		       :subelement (item-links :alias "ItemLinks"))
    (offer-summary :accessor offer-summary :initform () :initarg :offer-summary
 		  :subelement (offer-summary))
-   (editorial-review :accessor offer-editorial-reviews :initform ()
-		     :subelement (editorial-review-collection :alias "EditorialReviews"))
+   (editorial-reviews :accessor offer-editorial-reviews :initform ()
+		      :subelement (editorial-review-collection :alias "EditorialReviews"))
    (offers :accessor item-offers :initform ()
 	   :subelement (offers :alias "Offers")))
   (:metaclass element-class)
   (:tags ("Item"))
   (:documentation "HTTPHeader element in Amazon ECS response"))
 
+(defclass alternate-versions ()
+  ((versions-list :accessor alternate-versions :initform nil :initarg :versions
+		  :subelement (alternate-version :alias "AlternateVersion" :multiple t)))
+  (:metaclass element-class)
+  (:tags ("AlternateVersions")))
+
+(defmethod xml-mop:element-value ((obj alternate-versions))
+  (alternate-versions obj))
+
+(defclass alternate-version ()
+  ((title :accessor alternate-version-title :initform nil
+	  :subelement (simple-text-element :alias "Title"))
+   (binding :accessor alternate-version-binding :initform nil
+	    :subelement (simple-text-element :alias "Binding"))
+   (asin :accessor alternate-version-asin :initform nil
+	 :subelement (simple-text-element :alias "ASIN")))
+  (:metaclass element-class))
+
+(defmethod print-object ((obj alternate-version) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (format stream "~A" (alternate-version-binding obj))))
+
+(defclass item-links ()
+  ((list :accessor item-links :initform nil :initarg :item-links
+	 :subelement (item-link :alias "ItemLink" :multiple t)))
+  (:metaclass element-class)
+  (:tags ("ItemLinks")))
+
+(defmethod xml-mop:element-value ((obj item-links))
+  (item-links obj))
+
+(defclass item-link ()
+  ((description :accessor item-link-description :initform nil
+	  :subelement (simple-text-element :alias "Description"))
+   (uri :accessor item-link-uri :initform nil
+	:subelement (simple-text-element :alias "URL")))
+  (:metaclass element-class))
+
 (defclass image-set ()
   ((category :initform nil :accessor image-set-category :attribute "Category")
    (swatch-image :accessor image-set-swatch-image
-		 :subelement (image-element :alias "SwatchImage"))
+		 :subelement (image-element :alias "SwatchImage")
+		 :initform nil)
    (large-image  :accessor image-set-large-image
-		 :subelement (image-element :alias "LargeImage"))
-   (small-image :subelement (image-element :alias "SmallImage") :accessor image-set-small-image)
+		 :subelement (image-element :alias "LargeImage")
+		 :initform nil)
+   (small-image :subelement (image-element :alias "SmallImage")
+		:accessor image-set-small-image
+		:initform nil)
+   (tiny-image :subelement (image-element :alias "TinyImage")
+		:accessor image-set-Tiny-image
+		:initform nil)
+   (thumbnail-image :subelement (image-element :alias "ThumbnailImage")
+		    :initform nil
+		    :accessor image-set-thumbnail-image)
    (medium-image :subelement (image-element :alias "MediumImage") :accessor image-set-item-medium-image))
   (:metaclass element-class)
   (:documentation "Contains a set of images.  user contributed i guess?"))
 
 (defclass image-set-collection ()
-  ((image-sets :initform nil :accessor image-sets
+  ((merchant-id :initform nil :accessor image-sets-merchant-id
+		:subelement (simple-text-element :alias "MerchantId"))
+   (image-sets :initform nil :accessor image-sets
 	       :subelement (image-set :alias "ImageSet" :multiple t)))
   (:metaclass element-class)
   (:documentation "Contains a set of images.  user contributed i guess?"))
@@ -298,6 +356,8 @@
 	:subelement (simple-text-element :alias "UPC"))
    (ean :accessor item-ean :initform nil
 	:subelement (simple-text-element :alias "EAN"))
+   (sku :accessor item-sku :initform nil
+	:subelement (simple-text-element :alias "SKU"))
    (isbn :accessor item-isbn :initform nil
 	 :subelement (simple-text-element :alias "ISBN"))
    (edition :accessor item-edition :initform nil
@@ -306,7 +366,7 @@
 	    :subelement (simple-text-element :alias "format"))
    (publication-date :accessor item-publication-date :initform nil
 		     :subelement (date-element :alias "PublicationDate"))
-   (release-date :accessor item-publication-date :initform nil
+   (release-date :accessor item-release-date :initform nil
 		 :subelement (date-element :alias "ReleaseDate"))
    (publisher :accessor item-publisher :initform nil
 	      :subelement (simple-text-element :alias "Publisher"))
@@ -330,11 +390,21 @@
    (manufacturer :accessor manufacturer :initform "" :initarg :manufacturer
 		 :subelement (simple-text-element :alias "Manufacturer"))
    (product-group :accessor item-product-group :initform nil
-		  :subelement (simple-text-element :alias "ProductGroup")))
+		  :subelement (simple-text-element :alias "ProductGroup"))
+   (product-type-name :accessor item-product-type-name :initform nil
+		      :subelement (simple-text-element :alias "ProductTypeName")))
 
   (:metaclass element-class)
   (:tags "ItemAttributes")
   (:documentation "HTTPHeader element in Amazon ECS response"))
+
+(define-chained-accessors (amazon-item item-attributes)
+  item-authors item-features item-height item-length item-width
+  item-weight item-package-dimensions item-list-price
+  item-title item-upc item-ean item-isbn item-edition item-format item-publication-date item-release-date
+  item-publisher item-studio item-label item-number-of-pages item-binding item-dewey-decimal-number
+  creators actors directors item-number-of-items manufacturer item-product-group)
+    
 
 (defclass dimensional-element ()
   ((height :accessor dimension-height :initform nil
@@ -381,10 +451,16 @@
 (defclass merchant (vendor-like-mixin)
   ((merchant-id :accessor merchant-id :initform nil
 		:subelement (simple-text-element :alias "MerchantId"))
+   (merchant-name :accessor merchant-name :initform nil
+		  :subelement (simple-text-element :alias "Name"))
    (glancepage :accessor glance-page :initform nil
 	       :subelement (simple-text-element :alias "GlancePage")))
   (:metaclass element-class)
   (:documentation "Summary of offers for a particular item"))
+
+(defmethod print-object ((obj merchant) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (format stream "~A" (merchant-name obj))))
 
 (defclass seller (vendor-like-mixin)
   ((seller-id :accessor seller-id :initform nil :initarg :seller-id
@@ -414,8 +490,8 @@
 	  :subelement (price-element :alias "Price"))
    (availability :accessor availability :initform nil
 		 :subelement (simple-text-element :alias "Availability"))
-;   (availabilityattributes :accessor availability-attributes :initform nil
-;   :subelement (simple-text-element :alias "OfferListingId"))
+   (availability-attributes :accessor availability-attributes :initform nil
+			    :subelement (availability-attributes :alias "AvailabilityAttributes"))
    (amount-saved :accessor amount-saved :initform nil
 		 :subelement (price-element :alias "AmountSaved"))
    (percentage-saved :accessor percentage-saved :initform nil
@@ -429,29 +505,60 @@
    (:metaclass element-class)
   (:documentation "Summary of offers for a particular item"))
 
-(macrolet ((def-forwarded-accessors (from-class relation &rest accessors)
-	       `(progn
-		 ,@(mapcar (lambda (accessor)
-			     `(defmethod ,accessor ((,from-class ,from-class))
-			       (,accessor (,relation ,from-class))))
-			   accessors))))
-  (def-forwarded-accessors
-      offer offer-attributes
-      offer-condition condition-note will-ship-expedited will-ship-international subcondition)
-  (def-forwarded-accessors
-      offer offer-listing
-    offer-listing-id price exchange-id quantity eligible-for-saver-shipping?
-    availability amount-saved))
-      
+(defclass availability-attributes ()
+  ((availability-type :accessor availability-type :initform nil :initarg :availability-type
+		      :subelement (simple-text-element :alias "AvailabilityType"))
+   
+   (availability-minimum-hours :accessor availability-minimum-hours :initform nil
+			       :subelement (numerical-text-element :alias "MinimumHours"))
+   (availability-maximum-hours :accessor availability-maximum-hours :initform nil
+			       :subelement (numerical-text-element :alias "MaximumHours")))
+  (:metaclass element-class)
+  (:documentation "HTTPHeader element in Amazon ECS response"))
+
+
+
+(defmacro define-chained-accessors ((from-class relation) &body accessors)
+  `(progn
+     ,@(mapcar (lambda (accessor)
+		 (let ((obj-var (gensym "object")))
+		   `(defmethod ,accessor ((,obj-var ,from-class))
+		      (,accessor (,relation ,obj-var)))))
+	       accessors)))
+
+(define-chained-accessors (offer offer-attributes)
+    offer-condition condition-note will-ship-expedited will-ship-international subcondition)
+
+(define-chained-accessors (offer offer-listing)
+    offer-listing-id price exchange-id quantity eligible-for-saver-shipping? availability amount-saved)
+
 
 (defclass editorial-review ()
   ((source :accessor review-source :initform nil
 	   :subelement (simple-text-element :alias "Source"))
    (content :accessor review-content :initform nil
-	   :subelement (simple-text-element :alias "Content")))
+	   :subelement (simple-text-element :alias "Content"))
+   (link-suppress? :accessor review-link-suppressed? :initform nil
+		   :subelement (yes-no-element :alias "IsLinkSuppressed")))
   (:metaclass element-class))    
 
 (defclass editorial-review-collection ()
-  ((reviews :accessor reviews  :initform nil
+  ((reviews :accessor editorial-reviews  :initform nil
 	    :subelement (editorial-review :alias "EditorialReview" :multiple t)))
   (:metaclass element-class))
+
+;;;; utility
+(defun my-parse-date (ugly-date-string)
+  (labels ((parse-single-year (ugly-date-string)
+	     (cl-ppcre:register-groups-bind
+		 (single-year-string)
+		 ("^([0-9]{4,4})$" ugly-date-string)
+	       (if single-year-string
+		   (encode-universal-time 0 0 0 1 1 (parse-number:parse-number single-year-string))
+		   nil))))
+    (handler-case   (parse-time ugly-date-string)
+      (type-error ()
+	(let ((second-attempt (parse-single-year ugly-date-string)))
+	  (if second-attempt
+	      second-attempt
+	      (error "failed to parse date ~A" ugly-date-string)))))))

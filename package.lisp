@@ -122,7 +122,6 @@
 	   #:items
 	   #:items-errors
 	   #:items-request-info
-	   #:join-string-list
 	   #:key-value-element
 	   #:keywords
 	   #:label
@@ -137,6 +136,7 @@
 	   #:medium-image
 	   #:merchant
 	   #:merchant-id
+	   #:merchant-name
 	   #:merchantid
 	   #:message
 	   #:name
@@ -240,14 +240,23 @@
 	   #:yes-no-element
 
 	   ;; non-xmlmopy stuff
-	   #:parse-response-stream
-	   #:perform-amazon-search
+	   #:item-search
+	   #:item-lookup
+;	   #:parse-response-stream
+;	   #:perform-amazon-search
 	   #:official-amazon-offer?
 	   #:item-official-amazon-offer
 	   #:item-authors
-	   #:perform-amazon-request
+;	   #:perform-amazon-request
 	   #:price-in-cents
-	   #:price-in-dollars))
+	   #:price-in-dollars
+	   #:*access-key-id*
+	   #:*secret-access-key*
+	   #:*associates-id*
+	   #:*webservices-domain*
+	   #:*webservices-uri-path*
+	   #:*webservices-version*
+	   ))
 
 (in-package :org.iodb.amazon.ecs)
 

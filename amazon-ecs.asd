@@ -10,5 +10,7 @@
   :license "GPL version 2: http://www.gnu.org/licenses/gpl.html"
   :components ((:file "package")
 	       (:file "ecs-response-model" :depends-on ("package" ))
-	       (:file "query-ecs" :depends-on ("ecs-response-model")))
-  :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma"))
+	       (:file "generate-uri" :depends-on ("package"))
+	       (:file "query-ecs" :depends-on ("ecs-response-model" "generate-uri")))
+  :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma" "ironclad"
+			  "hunchentoot"))
