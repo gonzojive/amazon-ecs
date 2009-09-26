@@ -13,4 +13,4 @@
 	       (:file "generate-uri" :depends-on ("package"))
 	       (:file "query-ecs" :depends-on ("ecs-response-model" "generate-uri")))
   :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma" "ironclad"
-			  "hunchentoot"))
+			  "hunchentoot" "bordeaux-threads"))

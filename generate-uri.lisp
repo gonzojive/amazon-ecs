@@ -69,6 +69,16 @@
     (let ((words (cl-ppcre:split "-" hyphen-word)))
       (apply #'concatenate 'string (mapcar #'string-capitalize words))))
 
+  (defgeneric lisp-value->url-value (lisp-value)
+    (:documentation "Given a lisp value, convert it into a string that may then be
+embedded in a URL and maintain the meaning of the orignal lisp value. E.G.
+:dog-house would be translated into 'DogHouse'.  Such url values must further
+be url-encoded.")
+    (:method ((lisp-value string)) lisp-value)
+    (:method ((lisp-value null)) "")
+    (:method ((lisp-value t)) (format nil "~A" lisp-value))
+    (:method ((lisp-value symbol)) (hyphenated->camelized (symbol-name lisp-value))))
+    
 
   (defun destructure-url-key-form (url-key-form)
     "Returns 2 values: the url-key-form symbol interned in the current package, and the
@@ -79,7 +89,7 @@ URL key to use for this particular key."
     ;;				url-key-form
     ;;				(hyphenated->camelized (symbol-name url-key-form))))))
     (when (atom url-key-form)
-      (setf url-key-form (list url-key-form (hyphenated->camelized (symbol-name url-key-form)))))
+      (setf url-key-form (list url-key-form (lisp-value->url-value url-key-form))))
     (values (first url-key-form) ;(intern (symbol-name (first url-key-form)))
 	    (second url-key-form))))
 
@@ -112,7 +122,6 @@ unspecified"
   do).
 * Percent encode all other characters with %XY, where X and Y are hex characters 0-9 and
   uppercase A-F."
-
   (with-output-to-string (s)
     (loop :for c :across string
 	  :for index :from 0
@@ -144,32 +153,22 @@ unspecified"
 of a query."
   (declare (type string access-key-id secret-access-key)
 	   (type (or string symbol) operation))
-  (let* ((query-without-signature
-	  (format nil
-		  "~{~A~^&~}"
-		  (mapcar #'(lambda (keyval-pair)
-			      (urlize-key-value (car keyval-pair) (cdr keyval-pair)))
-			  (let* ((params-unsorted
-				  (concatenate
-				   'list
-				   (bind-and-parameterize ("AWSECommerceService" "Service")
-							  (access-key-id "AWSAccessKeyId")
-							  operation
-							  &optional
-							  (associate-id "AssociateTag")
-							  merchant-id
-							  response-group
-							  version
-							  validate
-							  timestamp)
-				   parameters))
-				 (params-sorted (sort params-unsorted #'string< :key #'car)))
-			    params-sorted))))
-	 (query-with-signature
-	  (concatenate 'string
-		       query-without-signature
-		       "&Signature="
-		       (amazon-url-encode (sign query-without-signature secret-access-key)))))
+  (let* ((all-parameters (concatenate
+			  'list
+			  (bind-and-parameterize ("AWSECommerceService" "Service")
+						 (access-key-id "AWSAccessKeyId")
+						 operation
+						 &optional
+						 (associate-id "AssociateTag")
+						 merchant-id
+						 response-group
+						 version
+						 validate
+						 timestamp)
+			  parameters))
+	 (query-with-signature (agnostic-parameters-string
+				:parameters all-parameters
+				:secret-access-key secret-access-key)))
     query-with-signature))
   
 
@@ -186,58 +185,97 @@ of a query."
     (format t "URI:~%~A~%" url-with-signature)
     url-with-signature))
 
-(defun batch-request-parameters-string (&key
-					(access-key-id *access-key-id*)
-					(associate-id *associates-id*)
-					(secret-access-key *secret-access-key*)
-					(version *webservices-version*)
-					merchant-id
-					operation
-					shared-parameters
-					independent-parameters
-					(timestamp (formatted-timestamp)))
-  "Generates a parameters string to be either included in the GET url or POST body
-of a query.
+(defun uri-for-post ()
+  (concatenate 'string
+	       "http://"
+	       *webservices-domain*
+	       *webservices-uri-path*))
 
-Each shared parameter will be formatted like so:
-   OperationName.ReferenceNumber.Parameter=Value
-Each simple parameter will be formatted like so:
-   OperationName.Parameter=Value
-"
+(defun generate-batch-parameters-string (&key
+					 operation
+					 (access-key-id *access-key-id*)
+					 (associate-id *associates-id*)
+					 (secret-access-key *secret-access-key*)
+					 (version *webservices-version*)
+					 merchant-id
+					 parameters
+					 response-group
+					 validate
+					 (timestamp (formatted-timestamp)))
   (declare (type string access-key-id secret-access-key)
 	   (type (or string symbol) operation))
-
-  (let* ((parameters
-	  (apply 'append
-		 
-	 (query-without-signature
-	  (format nil
-		  "~{~A~^&~}"
-		  (mapcar #'(lambda (keyval-pair)
-			      (urlize-key-value (car keyval-pair)
-						(cdr keyval-pair)))
-			  (let* ((params-unsorted
-				  (concatenate
-				   'list
-				   (bind-and-parameterize ("AWSECommerceService" "Service")
-							  (access-key-id "AWSAccessKeyId")
-							  operation
-							  &optional
-							  (associate-id "AssociateTag")
-							  merchant-id
-							  response-group
-							  version
-							  validate
-							  timestamp)
-				   parameters))
-				 (params-sorted (sort params-unsorted #'string< :key #'car)))
-			    params-sorted))))
-	 (query-with-signature
-	  (concatenate 'string
-		       query-without-signature
-		       "&Signature="
-		       (amazon-url-encode (sign query-without-signature secret-access-key)))))
+  (let* ((all-parameters (concatenate
+			  'list
+			  (bind-and-parameterize ("AWSECommerceService" "Service")
+						 (access-key-id "AWSAccessKeyId")
+						 operation
+						 &optional
+						 (associate-id "AssociateTag")
+						 merchant-id
+						 response-group
+						 version
+						 validate
+						 timestamp)
+			  parameters))
+	 (query-with-signature (agnostic-parameters-string
+				:parameters all-parameters
+				:secret-access-key secret-access-key)))
     query-with-signature))
+  
+
+(defun batch-request-parameters (&key
+				 operation
+				 simple-parameters
+				 shared-parameters
+				 independent-parameters)
+  "Generates the parameters for a batch query.
+
+Each member of  SIMPLE-PARAMETERS has the following form
+   (key . value)
+
+Each member of  SHARED-PARAMETERS has the following form
+   (key . value)
+
+Each member of INDEPENDENT-PARAMETERS is formatted like so
+   (key value1 valu2 value3 value4)
+
+It is assumed that each member of INDEPENDENT-PARAMETERS is the same
+length.  However, this is not validated at runtime
+
+Each member of SIMPLE-PARAMETERS will be formatted like so:
+   Parameter=Value
+
+Each member of SHARED-PARAMETERS will be formatted like so:
+   OperationName.Parameter=Value
+
+Each member of INDEPENDENT-PARAMETERS  will be formatted like so:
+   OperationName.ReferenceNumber.Parameter=Value
+"
+  (declare (type (or string symbol) operation))
+
+  (let* ((params (map 'list #'identity simple-parameters))
+	 (op-string (lisp-value->url-value operation)))
+    (map nil
+	 #'(lambda (shared-param)
+	     (push (cons (format nil
+				 "~A.Shared.~A"
+				 op-string
+				 (lisp-value->url-value (car shared-param)))
+			 (cdr shared-param))
+		   params))
+	 shared-parameters)
+    (map nil
+	 #'(lambda (independent-param)
+	     (let ((base-key-string (format nil
+					    "~A.~A"
+					    op-string
+					    (lisp-value->url-value (car independent-param)))))
+	       (flet ((key (ref-num) (format nil "~A.~A" base-key-string ref-num)))
+		 (loop :for value :in (rest independent-param)
+		       :for i :from 1
+		       :do (push (cons (key i) value) params)))))
+	 independent-parameters)
+    params))
 
 (defun agnostic-parameters-string (&key
 				   (secret-access-key *secret-access-key*)
