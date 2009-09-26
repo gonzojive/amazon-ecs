@@ -174,12 +174,18 @@
 	     :subelement (simple-text-element :alias "DeliveryMethod"))
    (keywords :accessor keywords :initform nil :initarg :keywords
 	     :subelement (simple-text-element :alias "Keywords"))
+   (title :accessor request-title :initform nil :initarg :title
+	     :subelement (simple-text-element :alias "Title"))
+   (author :accessor request-author :initform nil :initarg :author
+	     :subelement (simple-text-element :alias "Author"))
    (item-page :accessor item-page :initform 1 :initarg :item-page
 	     :subelement (simple-text-element :alias "ItemPage"))
    (merchant-id :accessor merchant-id :initform nil :initarg :merchant-id
 		:subelement (simple-text-element :alias "MerchantId"))
    (response-group :accessor request-response-group :initform nil
 	       :subelement (simple-text-element :alias "ResponseGroup"))
+   (review-sort :accessor request-review-sort :initform nil
+	       :subelement (simple-text-element :alias "ReviewSort"))
    (searchindex :accessor search-index :initform () :initarg :search-index
 		:subelement (simple-text-element :alias "SearchIndex")))
   (:metaclass element-class)
@@ -193,6 +199,18 @@
 	    :subelement (simple-text-element :alias "IdType"))
    (search-index :initform nil :accessor request-search-index
 	    :subelement (simple-text-element :alias "SearchIndex"))
+   (condition :initform nil :accessor request-condition
+	    :subelement (simple-text-element :alias "Condition"))
+   (delivery-method :initform nil :accessor request-delivery-method
+		    :subelement (simple-text-element :alias "DeliveryMethod"))
+   (offer-page :initform nil :accessor request-offer-page
+		    :subelement (numerical-text-element :alias "OfferPage"))
+   (review-page :initform nil :accessor request-review-page
+		:subelement (numerical-text-element :alias "ReviewPage"))
+   (review-sort-page :initform nil :accessor request-review-sort
+		     :subelement (simple-text-element :alias "ReviewSort"))
+   (variation-page :initform nil :accessor request-variation-page
+		   :subelement (simple-text-element :alias "VariationPage"))
    (response-groups :accessor response-groups :initform () :initarg :response-groups
 	       :subelement (simple-text-element :alias "ResponseGroup" :multiple t))
    (merchant-id :accessor merchant-id :initform () :initarg :merchant-id
@@ -229,7 +247,7 @@
 		       :subelement (alternate-versions :alias "AlternateVersions"))
    (item-links :accessor item-links :initform nil :initarg :item-links
 		       :subelement (item-links :alias "ItemLinks"))
-   (offer-summary :accessor offer-summary :initform () :initarg :offer-summary
+   (offer-summary :accessor item-offer-summary :accessor offer-summary :initform () :initarg :offer-summary
 		  :subelement (offer-summary))
    (editorial-reviews :accessor offer-editorial-reviews :initform ()
 		      :subelement (editorial-review-collection :alias "EditorialReviews"))
@@ -238,6 +256,10 @@
   (:metaclass element-class)
   (:tags ("Item"))
   (:documentation "HTTPHeader element in Amazon ECS response"))
+
+(defmethod print-object ((obj amazon-item) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (write-sequence (item-asin obj) stream)))
 
 (defclass alternate-versions ()
   ((versions-list :accessor alternate-versions :initform nil :initarg :versions
@@ -381,10 +403,16 @@
    (number-of-pages :accessor item-number-of-pages :initform nil
 	    :subelement (numerical-text-element :alias "NumberOfPages"))
    (reading-level :subelement (simple-text-element :alias "ReadingLevel"))
+   (operating-system :subelement (simple-text-element :alias "OperatingSystem"))
+   (platform :subelement (simple-text-element :alias "Platform"))
    (binding :accessor item-binding :initform nil
 	    :subelement (simple-text-element :alias "Binding"))
    (dewey-decimal-number :accessor item-dewey-decimal-number :initform nil
 			 :subelement (simple-text-element :alias "DeweyDecimalNumber"))
+   (hardware-platform :accessor item-hardware-platform :initform "" :initarg :hardware-platform
+		      :subelement (simple-text-element :alias "HardwarePlatform"))
+   (item-dimensions :accessor item-dimensions :initform nil
+		    :subelement (dimensional-element :alias "ItemDimensions"))
    (creators :accessor creators :initform nil
 	     :subelement (creator :alias "Creator" :multiple t))
    (actors :accessor actors :initform () :initarg :actors)
@@ -396,7 +424,9 @@
    (product-group :accessor item-product-group :initform nil
 		  :subelement (simple-text-element :alias "ProductGroup"))
    (product-type-name :accessor item-product-type-name :initform nil
-		      :subelement (simple-text-element :alias "ProductTypeName")))
+		      :subelement (simple-text-element :alias "ProductTypeName"))
+   (languages :accessor item-languages :initform nil
+	      :subelement (languages-collection :alias "Languages")))
 
   (:metaclass element-class)
   (:tags "ItemAttributes")
@@ -407,8 +437,21 @@
   item-weight item-package-dimensions item-list-price
   item-title item-upc item-ean item-isbn item-edition item-format item-publication-date item-release-date
   item-publisher item-studio item-label item-number-of-pages item-binding item-dewey-decimal-number
-  creators actors directors item-number-of-items manufacturer item-product-group)
-    
+  creators actors directors item-number-of-items manufacturer item-product-group item-languages)
+
+(defclass languages-collection ()
+  ((languages :accessor languages :initform ()
+	      :subelement (language :alias "Language" :multiple t)))
+  (:metaclass element-class)
+  (:documentation "Summary of offers for a particular item"))
+
+(defclass language ()
+  ((language-name :accessor language-name :initform nil
+		  :subelement (simple-text-element :alias "Name"))
+   (language-type :accessor language-type :initform nil
+		  :subelement (simple-text-element :alias "Type")))
+  (:metaclass element-class)
+  (:documentation "Summary of offers for a particular item"))
 
 (defclass dimensional-element ()
   ((height :accessor dimension-height :initform nil
@@ -562,7 +605,29 @@
 		   nil))))
     (handler-case   (parse-time ugly-date-string)
       (type-error ()
-	(let ((second-attempt (parse-single-year ugly-date-string)))
-	  (if second-attempt
-	      second-attempt
-	      (error "failed to parse date ~A" ugly-date-string)))))))
+	(handler-case
+	    (let ((second-attempt (parse-single-year ugly-date-string)))
+	      second-attempt)
+	  ;; failed to parse date
+	  (type-error () nil))))))
+
+	
+(defgeneric official-amazon-offer? (offer)
+  (:documentation "Returns whether or not the offer is an official amazon offer."))
+
+(defmethod official-amazon-offer? ((offer offer))
+  (let ((merchant (offer-merchant offer)))
+    (and merchant
+	 (or (string-equal (merchant-id merchant)
+			   "ATVPDKIKX0DER")
+	     (string-equal (merchant-id merchant)
+			   "Amazon")))))
+
+(defgeneric item-official-amazon-offer  (item)
+  (:documentation "Returns the first official amazon offer for the item."))
+
+(defmethod item-official-amazon-offer ((item amazon-item))
+  (find-if #'ecs:official-amazon-offer?
+	   (and (ecs:item-offers item)
+		(ecs:offers (ecs:item-offers item)))))
+

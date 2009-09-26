@@ -105,6 +105,7 @@
 	   #:item-medium-image
 	   #:item-number-of-items
 	   #:item-number-of-pages
+	   #:item-offer-summary
 	   #:item-offers
 	   #:item-package-dimensions
 	   #:item-price-description-mixin
@@ -256,6 +257,10 @@
 	   #:*webservices-domain*
 	   #:*webservices-uri-path*
 	   #:*webservices-version*
+	   #:cart-create
+	   #:cart-add
+	   #:cart-clear
+	   #:cart-modify
 	   ))
 
 (in-package :org.iodb.amazon.ecs)
