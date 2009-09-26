@@ -1,10 +1,10 @@
 (in-package :org.iodb.amazon.ecs)
 
-(defparameter *access-key-id* nil
+(defvar *access-key-id* nil
   "The access key is assigned by amazon and is the public key that identifies your account.")
-(defparameter *secret-access-key* nil
+(defvar *secret-access-key* nil
   "The secret key is assigned by Amazon.com and is only known to you.")
-(defparameter *associates-id* "bookllamacom-20"
+(defvar *associates-id* "bookllamacom-20"
   "This is used to embed your money-making associate ID into links etc.")
 
 (defparameter *webservices-domain* "webservices.amazon.com"
@@ -28,7 +28,7 @@
     (symbol
        (urlize-key-value key (hyphenated->camelized (symbol-name value))))
     (string
-       (format nil "~A=~A" (hunchentoot:url-encode key) (hunchentoot:url-encode value)))))
+       (format nil "~A=~A" (amazon-url-encode key) (amazon-url-encode value)))))
     
 (defun formatted-timestamp (&optional (time-to-decode (get-universal-time)))
   (multiple-value-bind (second minute hour date month year)
@@ -102,18 +102,46 @@ unspecified"
 						(when ,var (cons ,key-string ,var))))))))
 			     url-key-forms)))))
 
-(defun generate-uri (&key
-		     (access-key-id *access-key-id*)
-		     (associate-id *associates-id*)
-		     (secret-access-key *secret-access-key*)
-		     (version *webservices-version*)
-		     merchant-id
-		     operation
-		     parameters
-		     response-group
-		     validate
-		     (timestamp (formatted-timestamp)))
-  "Generates an Amazon Advertizing API request uri.  PARAMETERS is an alist of parameters."
+(defun amazon-url-encode (string)
+  "URL-encode a string according to Amazon's URL encoding rules:
+* Do not URL encode any of the unreserved characters that RFC 3986 defines.
+  These unreserved characters are A-Z, a-z, 0-9, hyphen ( - ), underscore ( _ ), period ( . ),
+  and tilde ( ~ ).
+* Percent encode extended UTF-8 characters in the form %XY%ZA....
+* Percent encode the space character as %20 (and not +, as common encoding schemes
+  do).
+* Percent encode all other characters with %XY, where X and Y are hex characters 0-9 and
+  uppercase A-F."
+
+  (with-output-to-string (s)
+    (loop :for c :across string
+	  :for index :from 0
+          :do (cond ((or (char<= #\0 c #\9)
+			 (char<= #\a c #\z)
+			 (char<= #\A c #\Z)
+			 (find c "-_.~" :test #'char=))
+		     (write-char c s))
+		    ((<= 0 (char-code c) 128)
+		     (format s "%~2,'0x" (char-code c)))
+		    (t
+		     (loop :for octet :across (flexi-streams:string-to-octets string
+						    :start index
+						    :end (1+ index))
+			   :do (format s "%~2,'0x" octet)))))))
+
+(defun generate-parameters-string (&key
+				   (access-key-id *access-key-id*)
+				   (associate-id *associates-id*)
+				   (secret-access-key *secret-access-key*)
+				   (version *webservices-version*)
+				   merchant-id
+				   operation
+				   parameters
+				   response-group
+				   validate
+				   (timestamp (formatted-timestamp)))
+  "Generates a parameters string to be either included in the GET url or POST body
+of a query."
   (declare (type string access-key-id secret-access-key)
 	   (type (or string symbol) operation))
   (let* ((query-without-signature
@@ -137,19 +165,103 @@ unspecified"
 				   parameters))
 				 (params-sorted (sort params-unsorted #'string< :key #'car)))
 			    params-sorted))))
+	 (query-with-signature
+	  (concatenate 'string
+		       query-without-signature
+		       "&Signature="
+		       (amazon-url-encode (sign query-without-signature secret-access-key)))))
+    query-with-signature))
+  
+
+(defun generate-uri (&rest rest)
+  "Generates an Amazon Advertizing API request uri.  PARAMETERS is an alist of parameters."
+  (let* ((query-with-signature (apply 'generate-parameters-string rest))
 	 (url-with-signature
 	  (concatenate 'string
 		       "http://"
 		       *webservices-domain*
 		       *webservices-uri-path*
 		       "?"
-		       query-without-signature
-		       "&Signature="
-		       (hunchentoot:url-encode (sign query-without-signature secret-access-key)))))
+		       query-with-signature)))
     (format t "URI:~%~A~%" url-with-signature)
     url-with-signature))
-		      
 
+(defun batch-request-parameters-string (&key
+					(access-key-id *access-key-id*)
+					(associate-id *associates-id*)
+					(secret-access-key *secret-access-key*)
+					(version *webservices-version*)
+					merchant-id
+					operation
+					shared-parameters
+					independent-parameters
+					(timestamp (formatted-timestamp)))
+  "Generates a parameters string to be either included in the GET url or POST body
+of a query.
+
+Each shared parameter will be formatted like so:
+   OperationName.ReferenceNumber.Parameter=Value
+Each simple parameter will be formatted like so:
+   OperationName.Parameter=Value
+"
+  (declare (type string access-key-id secret-access-key)
+	   (type (or string symbol) operation))
+
+  (let* ((parameters
+	  (apply 'append
+		 
+	 (query-without-signature
+	  (format nil
+		  "~{~A~^&~}"
+		  (mapcar #'(lambda (keyval-pair)
+			      (urlize-key-value (car keyval-pair)
+						(cdr keyval-pair)))
+			  (let* ((params-unsorted
+				  (concatenate
+				   'list
+				   (bind-and-parameterize ("AWSECommerceService" "Service")
+							  (access-key-id "AWSAccessKeyId")
+							  operation
+							  &optional
+							  (associate-id "AssociateTag")
+							  merchant-id
+							  response-group
+							  version
+							  validate
+							  timestamp)
+				   parameters))
+				 (params-sorted (sort params-unsorted #'string< :key #'car)))
+			    params-sorted))))
+	 (query-with-signature
+	  (concatenate 'string
+		       query-without-signature
+		       "&Signature="
+		       (amazon-url-encode (sign query-without-signature secret-access-key)))))
+    query-with-signature))
+
+(defun agnostic-parameters-string (&key
+				   (secret-access-key *secret-access-key*)
+				   parameters
+				   sortedp)
+  "Generates a parameters string to be either included in the GET url or POST body
+of a query."
+  (declare (type string secret-access-key))
+  (let* ((parameters-sorted
+	  (if sortedp
+	      parameters
+	      (sort parameters #'string< :key #'car)))
+	 (query-without-signature
+	  (format nil
+		  "~{~A~^&~}"
+		  (mapcar #'(lambda (keyval-pair)
+			      (urlize-key-value (car keyval-pair) (cdr keyval-pair)))
+			  parameters-sorted)))
+	 (query-with-signature
+	  (concatenate 'string
+		       query-without-signature
+		       "&Signature="
+		       (amazon-url-encode (sign query-without-signature secret-access-key)))))
+    query-with-signature))
 
 
 ;;;; graveyard
