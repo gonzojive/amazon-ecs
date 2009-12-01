@@ -106,3 +106,38 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 			     (apply #'generate-operation-specific-parameters operation key-args))))
     (amazon-request-and-parse :parameters simple-parameters
 			      :secret-access-key secret-access-key)))
+
+(defun simple-parameters (&key
+			  (access-key-id *access-key-id*)
+			  (associate-id *associates-id*)
+			  (version *webservices-version*)
+			  operation
+			  validate
+			  (timestamp (formatted-timestamp)))
+			  
+  ""
+  (declare (type string access-key-id))
+  (bind-and-parameterize ("AWSECommerceService" "Service")
+			 (access-key-id "AWSAccessKeyId")
+			 timestamp
+			 operation
+			 &optional
+			 (associate-id "AssociateTag")
+			 version
+			 validate))
+
+(defun perform-batch-operation (operation
+				&key
+				simple-parameters-args
+				shared-parameters-args
+				independent-parameters-args
+				(secret-access-key *secret-access-key*))
+  ""
+  (declare (type string secret-access-key))
+  (let* ((parameters
+	  (concatenate 'list
+		       (apply 'simple-parameters :operation operation simple-parameters-args)
+		       (batch-params operation shared-parameters-args independent-parameters-args))))
+    (format t "Paramters: ~%~A~%" (sort (copy-list parameters) #'string< :key #'car))
+    (amazon-request-and-parse :parameters parameters
+			      :secret-access-key secret-access-key)))

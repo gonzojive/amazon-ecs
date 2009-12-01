@@ -266,11 +266,8 @@ Each member of INDEPENDENT-PARAMETERS  will be formatted like so:
 	 shared-parameters)
     (map nil
 	 #'(lambda (independent-param)
-	     (let ((base-key-string (format nil
-					    "~A.~A"
-					    op-string
-					    (lisp-value->url-value (car independent-param)))))
-	       (flet ((key (ref-num) (format nil "~A.~A" base-key-string ref-num)))
+	     (let ((param-key-string  (lisp-value->url-value (car independent-param))))
+	       (flet ((key (ref-num) (format nil "~A.~A.~A" op-string ref-num param-key-string)))
 		 (loop :for value :in (rest independent-param)
 		       :for i :from 1
 		       :do (push (cons (key i) value) params)))))
