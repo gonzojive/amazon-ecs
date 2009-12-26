@@ -1,6 +1,6 @@
 (defpackage :org.iodb.amazon.ecs
   (:nicknames :amazon-ecs :ecs :iodb-ecs)
-  (:use :common-lisp :net.telent.date :xml-mop)
+  (:use :common-lisp :net.telent.date :xml-mop :alexandria)
   (:export #:+amazon-merchant-id+
 	   #:abstract-root-response
 	   #:actors
@@ -74,7 +74,7 @@
 	   #:image-set
 	   #:image-set-category
 	   #:image-set-collection
-	   #:image-set-item-medium-image
+	   #:image-set-medium-image
 	   #:image-set-large-image
 	   #:image-set-small-image
 	   #:image-sets
@@ -94,6 +94,7 @@
 	   #:item-height
 	   #:item-id
 	   #:item-image-sets
+	   #:item-image-set-collection
 	   #:item-isbn
 	   #:item-label
 	   #:item-large-image
@@ -245,6 +246,7 @@
 	   #:item-lookup
 ;	   #:parse-response-stream
 ;	   #:perform-amazon-search
+	   #:official-amazon.com-merchant?
 	   #:official-amazon-offer?
 	   #:item-official-amazon-offer
 	   #:item-authors
@@ -257,10 +259,16 @@
 	   #:*webservices-domain*
 	   #:*webservices-uri-path*
 	   #:*webservices-version*
+
+	   #:*http-request-function*
+	   #:*http-request-frequency*
 	   #:cart-create
 	   #:cart-add
 	   #:cart-clear
 	   #:cart-modify
+
+	   #:perform-operation
+	   #:perform-batch-operation
 	   ))
 
 (in-package :org.iodb.amazon.ecs)

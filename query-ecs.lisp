@@ -4,17 +4,20 @@
 
 (defun item-lookup (&rest op-params)
   (let ((parsed-query-root (apply 'perform-operation :item-lookup op-params)))
-    (values (response-items parsed-query-root)
+    (values (first (response-items parsed-query-root))
 	    parsed-query-root)))
 
 (defun item-search (&rest op-params)
   (let ((parsed-query-root (apply 'perform-operation :item-search op-params)))
-    (values (response-items parsed-query-root)
+    (values (first (response-items parsed-query-root))
 	    parsed-query-root)))
 
 ;(find-class 'item-lookup-response)
 (defparameter *last-request-time* (get-universal-time))
 (defparameter *request-lock* (bordeaux-threads:make-lock "amazon-http-requester"))
+
+(defparameter *http-request-function* #'drakma:http-request)
+(defparameter *http-request-frequency* 1)
 
 (defun amazon-http-request (uri)
   "Requests the given URI and returns a stream with the result.  Thread friendly
@@ -23,14 +26,14 @@ and avoids sending at more than 1 per second."
   (unwind-protect
        (progn
 	 (when (< (- (get-universal-time) *last-request-time*)
-		  1)
-	   (sleep 1))
-	 (drakma:http-request uri :want-stream t))
+		  *http-request-frequency*)
+	   (sleep *http-request-frequency*))
+	 (funcall *http-request-function* uri :want-stream t))
     (setf *last-request-time* (get-universal-time))
     (bordeaux-threads:release-lock *request-lock*)))
 
 (defparameter *default-possible-root-elements*
-  (mapcar #'find-class '(item-lookup-response item-search-response)))
+  (mapcar #'find-class '(item-lookup-response item-search-response cart-create-response)))
 
 (defun amazon-request-and-parse (&key
 				 parameters
@@ -45,6 +48,7 @@ and avoids sending at more than 1 per second."
 			   (uri-for-post)
 			   "?"
 			   query-with-signature)))
+    (format t "Amazon request params:~%~S~%" parameters)
     (format t "Amazon Request URI:~%~A~%" uri)
     (let ((parsed-query
 	   (request-and-parse uri

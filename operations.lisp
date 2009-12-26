@@ -41,9 +41,9 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 	    &key ,@(remove nil
 			   (mapcar #'(lambda (param)
 				       (when (not (eql '&optional param))
-					 (destructuring-bind (param-symbol &key key-string (initform nil initform-suppliedp))
+					 (destructuring-bind (param-symbol &key key-string (initform nil initform-suppliedp) listp)
 					     param
-					   (declare (ignore key-string))
+					   (declare (ignore key-string listp))
 					   (if initform-suppliedp
 					       (list param-symbol initform)
 					       param-symbol))))
@@ -55,11 +55,11 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 					  (mapcar #'(lambda (param)
 						      (if (eql '&optional param)
 							  param
-							  (destructuring-bind (param-symbol &key key-string initform)
+							  (destructuring-bind (param-symbol &key key-string listp initform)
 							      param
 							    (declare (ignore initform))
-							    (if key-string
-								(list param-symbol key-string)
+							    (if (or key-string listp)
+								(list param-symbol :key-string key-string :listp listp)
 								param-symbol))))
 						  canonicalized-params)))))))
 							 
@@ -79,6 +79,7 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 			       response-group
 			       (ispu-postal-code :key-string "ISPUPostalCode")))
 
+(defop :cart-create ((items :key-string "Item" :listp t) &optional response-group merge-cart))
 
 (defun perform-operation (operation
 			  &rest key-args
@@ -95,12 +96,12 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 	   (type (or string symbol) operation))
   (let* ((simple-parameters (concatenate
 			     'list
-			     (bind-and-parameterize ("AWSECommerceService" "Service")
-						    (access-key-id "AWSAccessKeyId")
+			     (bind-and-parameterize ("AWSECommerceService" :key-string "Service")
+						    (access-key-id :key-string "AWSAccessKeyId")
 						    operation
 						    timestamp
 						    &optional
-						    (associate-id "AssociateTag")
+						    (associate-id :key-string "AssociateTag")
 						    version
 						    validate)
 			     (apply #'generate-operation-specific-parameters operation key-args))))
@@ -117,12 +118,12 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
 			  
   ""
   (declare (type string access-key-id))
-  (bind-and-parameterize ("AWSECommerceService" "Service")
-			 (access-key-id "AWSAccessKeyId")
+  (bind-and-parameterize ("AWSECommerceService" :key-string "Service")
+			 (access-key-id :key-string "AWSAccessKeyId")
 			 timestamp
 			 operation
 			 &optional
-			 (associate-id "AssociateTag")
+			 (associate-id :key-string "AssociateTag")
 			 version
 			 validate))
 

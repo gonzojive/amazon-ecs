@@ -28,7 +28,9 @@
     (symbol
        (urlize-key-value key (hyphenated->camelized (symbol-name value))))
     (string
-       (format nil "~A=~A" (amazon-url-encode key) (amazon-url-encode value)))))
+       (format nil "~A=~A" (amazon-url-encode key) (amazon-url-encode value)))
+    (number
+       (urlize-key-value key (format nil "~A" value)))))
     
 (defun formatted-timestamp (&optional (time-to-decode (get-universal-time)))
   (multiple-value-bind (second minute hour date month year)
@@ -89,9 +91,10 @@ URL key to use for this particular key."
     ;;				url-key-form
     ;;				(hyphenated->camelized (symbol-name url-key-form))))))
     (when (atom url-key-form)
-      (setf url-key-form (list url-key-form (lisp-value->url-value url-key-form))))
-    (values (first url-key-form) ;(intern (symbol-name (first url-key-form)))
-	    (second url-key-form))))
+      (setf url-key-form (list url-key-form :key-string (lisp-value->url-value url-key-form))))
+    (destructuring-bind (symbol &key key-string listp)
+	url-key-form
+      (values symbol key-string listp))))
 
 
 (defmacro bind-and-parameterize (&rest url-key-forms)
@@ -99,18 +102,27 @@ URL key to use for this particular key."
 encoded into the URL.  Symbol is a variable that we assume is bound. Nil-bound variables are assumed
 unspecified"
   (let ((post-optional nil))
-    `(remove nil
-	     (list ,@(mapcar #'(lambda (url-key-form)
-				 (if (eql '&optional url-key-form)
-				     (progn (setf post-optional t) nil)
-				     (multiple-value-bind (variable key-string)
-					 (destructure-url-key-form url-key-form)
-				       (if (not post-optional)
-					   `(cons ,key-string ,variable)
-					   (let ((var (gensym key-string)))
-					     `(let ((,var ,variable))
-						(when ,var (cons ,key-string ,var))))))))
-			     url-key-forms)))))
+    `(concatenate 'list
+      ,@(mapcar #'(lambda (url-key-form)
+		    (if (eql '&optional url-key-form)
+			(progn (setf post-optional t) nil)
+			(multiple-value-bind (variable key-string listp)
+			    (destructure-url-key-form url-key-form)
+			  (if listp
+			      (with-unique-names (i attributes attribute)
+				`(apply #'concatenate 'list
+					(loop :for ,i :from 1
+					      :for ,attributes :in ,variable
+					      :collect (mapcar #'(lambda (,attribute)
+								   (cons (format nil "~A.~A.~A" ,key-string ,i (car ,attribute))
+									 (cdr ,attribute)))
+							       ,attributes))))
+			      (if (not post-optional)
+				  `(list (cons ,key-string ,variable))
+				  (let ((var (gensym key-string)))
+				    `(let ((,var ,variable))
+				       (when ,var (list (cons ,key-string ,var))))))))))
+		url-key-forms))))
 
 (defun amazon-url-encode (string)
   "URL-encode a string according to Amazon's URL encoding rules:
@@ -155,11 +167,11 @@ of a query."
 	   (type (or string symbol) operation))
   (let* ((all-parameters (concatenate
 			  'list
-			  (bind-and-parameterize ("AWSECommerceService" "Service")
-						 (access-key-id "AWSAccessKeyId")
+			  (bind-and-parameterize ("AWSECommerceService" :key-string "Service")
+						 (access-key-id :key-string "AWSAccessKeyId")
 						 operation
 						 &optional
-						 (associate-id "AssociateTag")
+						 (associate-id :key-string "AssociateTag")
 						 merchant-id
 						 response-group
 						 version
@@ -206,11 +218,11 @@ of a query."
 	   (type (or string symbol) operation))
   (let* ((all-parameters (concatenate
 			  'list
-			  (bind-and-parameterize ("AWSECommerceService" "Service")
-						 (access-key-id "AWSAccessKeyId")
+			  (bind-and-parameterize ("AWSECommerceService" :key-string "Service")
+						 (access-key-id :key-string "AWSAccessKeyId")
 						 operation
 						 &optional
-						 (associate-id "AssociateTag")
+						 (associate-id :key-string "AssociateTag")
 						 merchant-id
 						 response-group
 						 version
@@ -284,7 +296,7 @@ of a query."
   (let* ((parameters-sorted
 	  (if sortedp
 	      parameters
-	      (sort parameters #'string< :key #'car)))
+	      (sort (copy-list parameters) #'string< :key #'car)))
 	 (query-without-signature
 	  (format nil
 		  "~{~A~^&~}"

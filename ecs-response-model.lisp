@@ -64,15 +64,29 @@
   (print-unreadable-object (obj stream :type t :identity nil)
     (write-sequence (price-formatted obj) stream)))
 
-(defgeneric price-in-cents (price))
+(defgeneric price-in-cents (price &key currency-code))
 (defgeneric price-in-dollars (price))
 (defgeneric price-as-string (price))
-(defmethod price-in-cents ((price price-element))
+(defmethod price-in-cents ((price price-element) &key currency-code)
+  (when currency-code
+    (assert (equal "USD" (price-currency-code price))))
   (price-amount price))
 (defmethod price-in-dollars ((price price-element))
   (/ (price-in-cents price) 100))
 (defmethod price-as-string ((price price-element))
   (format t "$~,2F" (price-in-dollars price)))
+
+(defclass location-element ()
+  ((country-code :accessor location-country-code :initform nil :initarg :country-code
+		 :subelement (simple-text-element :alias "CountryCode"))
+   (state-code :accessor location-state-code :initform nil :initarg :state-code
+		 :subelement (simple-text-element :alias "StateCode")))
+  (:metaclass element-class)
+  (:documentation "Parent of all elements that contain location information"))
+
+(defmethod print-object ((obj location-element) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (format stream "~A,~A" (location-state-code obj) (location-country-code obj))))
 
 (defclass image-element ()
   ((url :subelement (simple-text-element :alias "URL") :accessor image-url :initform "")
@@ -87,7 +101,7 @@
    (operation-request :accessor response-operation-request :initform nil
 		      :subelement (operation-request :alias "OperationRequest"))
    (items :accessor response-items :initform nil :initarg :items
-	  :subelement (items :alias "Items")))
+	  :subelement (items :alias "Items" :multiple t)))
   (:metaclass element-class)
   (:documentation "root of most all operations response"))
 
@@ -102,6 +116,93 @@
   (:metaclass element-class)
   (:tags ("ItemLookupResponse"))
   (:documentation "root of item lookup responses"))
+
+(defclass cart-create-response (abstract-root-response)
+  ((cart :initform nil :accessor response-cart :initarg :cart
+	 :subelement (cart :alias "Cart")))
+  (:metaclass element-class)
+  (:tags ("CartCreateResponse"))
+  (:documentation "root of item lookup responses"))
+
+(defclass cart ()
+  ((request :initform nil :accessor cart-request :initarg :request
+	 :subelement (cart-request :alias "Request"))
+   (cart-id :initform nil :accessor cart-id :initarg :cart-id
+	    :subelement (simple-text-element :alias "CartId"))
+   (purchase-url :initform nil :accessor cart-purchase-url :initarg :purchase-url
+	    :subelement (simple-text-element :alias "PurchaseURL"))
+   (hmac :initform nil :accessor cart-hmac :initarg :hmac
+	    :subelement (simple-text-element :alias "HMAC"))
+   (hmac-urlencoded :initform nil :accessor cart-hmac-urlencoded :initarg :hmac-urlencoded
+	    :subelement (simple-text-element :alias "URLEncodedHMAC"))
+   (subtotal :initform nil :accessor cart-subtotal :initarg :subtotal
+	     :subelement (price-element :alias "SubTotal"))
+   (cart-items :initform nil :accessor cart-item-collection :initarg :cart-items
+	     :subelement (cart-item-collection :alias "CartItems")))
+  (:metaclass element-class))
+
+
+(defclass cart-item-collection ()
+  ((subtotal :initform nil :accessor cart-items-subtotal :initarg :subtotal
+	     :subelement (price-element :alias "SubTotal"))
+   (cart-items :initform nil :accessor cart-items :initarg :cart-items
+	  :subelement (cart-item :alias "CartItem" :multiple t)))
+  (:metaclass element-class))
+
+(defclass cart-item ()
+  ((price :initform nil :accessor cart-item-price :initarg :price
+	     :subelement (price-element :alias "Price"))
+   (item-total :initform nil :accessor cart-item-total-price :initarg :total-price
+	     :subelement (price-element :alias "ItemTotal"))
+   (asin :accessor cart-item-asin :initform nil :initarg :asin
+	 :subelement (simple-text-element :alias "ASIN"))
+   (cart-item-id :accessor cart-item-id :initform nil :initarg :cart-item-id
+		 :subelement (simple-text-element :alias "CartItemId"))
+   (exchange-id :accessor cart-item-exchange-id :initform nil
+		:subelement (simple-text-element :alias "ExchangeId"))
+   (merchant-id :accessor cart-item-merchant-id :initform nil
+		:subelement (simple-text-element :alias "MerchantId"))
+   (seller-id :accessor cart-item-seller-id :initform nil
+		:subelement (simple-text-element :alias "SellerId"))
+   (seller-nickname :accessor cart-seller-nickname :initform nil
+		    :subelement (simple-text-element :alias "SellerNickname"))
+   (quantity :accessor cart-item-quantity :initform nil
+	     :subelement (numerical-text-element :alias "Quantity"))
+   (title :accessor cart-item-title :initform nil
+	  :subelement (simple-text-element :alias "Title"))
+   (product-group :accessor cart-item-product-group :initform nil
+		  :subelement (simple-text-element :alias "ProductGroup")))
+  (:metaclass element-class))
+
+(defclass cart-request ()
+  ((is-valid :accessor request-is-valid? :initform nil
+		 :subelement (yes-no-element :alias "IsValid"))
+   (create-request :accessor cart-create-request :initform nil
+		   :subelement (cart-create-request :alias "CartCreateRequest")))
+  (:metaclass element-class)
+  (:documentation "OperationResponse element in Amazon ECS response"))
+
+(defclass cart-create-request ()
+  ((cart-items :initform nil :accessor cart-items
+	       :subelement (cart-request-items :alias "Items")))
+  (:metaclass element-class))
+
+(defclass cart-request-items ()
+  ((items :initform nil :accessor items
+	  :subelement (cart-request-item :alias "Item" :multiple t)))
+  (:metaclass element-class))
+
+(defmethod xml-mop:element-value ((element cart-request-items))
+  (items element))
+
+(defclass cart-request-item ()
+  ((asin :accessor item-asin :initform nil :initarg :asin
+	 :subelement (simple-text-element :alias "ASIN"))
+   (offer-listing-id :accessor item-offer-listing-id :initform nil :initarg :offer-listing-id
+	 :subelement (simple-text-element :alias "OfferListingId"))
+   (quantity :accessor item-quantity :initform nil
+	     :subelement (numerical-text-element :alias "Quantity")))
+  (:metaclass element-class))
 
 (defclass operation-request ()
   ((http-headers :accessor operation-http-headers :initform ()
@@ -242,7 +343,8 @@
    (large-image :initform nil :subelement (image-element :alias "LargeImage") :accessor item-large-image)
    (small-image :initform nil :subelement (image-element :alias "SmallImage") :accessor item-small-image)
    (medium-image :initform nil :subelement (image-element :alias "MediumImage") :accessor item-medium-image)
-   (image-sets :subelement (image-set-collection :alias "ImageSets") :accessor item-image-sets)
+   (image-set-collection :initform nil :subelement (image-set-collection :alias "ImageSets")
+			 :accessor item-image-sets :accessor item-image-set-collection)
    (alternate-versions :accessor alternate-versions :initform nil :initarg :alternate-versions
 		       :subelement (alternate-versions :alias "AlternateVersions"))
    (item-links :accessor item-links :initform nil :initarg :item-links
@@ -316,7 +418,7 @@
    (thumbnail-image :subelement (image-element :alias "ThumbnailImage")
 		    :initform nil
 		    :accessor image-set-thumbnail-image)
-   (medium-image :subelement (image-element :alias "MediumImage") :accessor image-set-item-medium-image))
+   (medium-image :subelement (image-element :alias "MediumImage") :accessor image-set-medium-image))
   (:metaclass element-class)
   (:documentation "Contains a set of images.  user contributed i guess?"))
 
@@ -426,7 +528,13 @@
    (product-type-name :accessor item-product-type-name :initform nil
 		      :subelement (simple-text-element :alias "ProductTypeName"))
    (languages :accessor item-languages :initform nil
-	      :subelement (languages-collection :alias "Languages")))
+	      :subelement (languages-collection :alias "Languages"))
+   (is-eligible-for-trade-in :accessor item-eligible-for-trade-in :initform nil
+			     :subelement (yes-no-element :alias "IsEligibleForTradeIn"))
+   (is-adult-product :accessor is-adult-product  :initform nil
+		     :subelement (yes-no-element :alias "IsAdultProduct"))
+   (trade-in-value :accessor item-trade-in-value :initform nil
+			     :subelement (price-element :alias "TradeInValue")))
 
   (:metaclass element-class)
   (:tags "ItemAttributes")
@@ -487,11 +595,20 @@
   (:metaclass element-class)
   (:documentation "Summary of offers for a particular item"))
 
+(defmethod print-object ((obj offer) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (format stream "~A for ~A"
+	    (offer-condition (offer-attributes obj))
+	    (price (offer-listing obj)))))
+	    
+
 (defclass vendor-like-mixin ()
   ((average-feedback-rating :accessor average-feedback-rating :initform nil
 			    :subelement (numerical-text-element :alias "AverageFeedbackRating"))
    (total-feedback :accessor total-feedback :initform nil
-		   :subelement (numerical-text-element :alias "TotalFeedback")))
+		   :subelement (numerical-text-element :alias "TotalFeedback"))
+   (location :accessor location :initform nil
+	     :subelement (location-element :alias "Location")))
   (:metaclass element-class)
   (:documentation "Mixed into seller and vendor to provide shared slots for the most part"))
 
@@ -545,12 +662,20 @@
 		     :subelement (simple-text-element :alias "PercentageSaved"))
    (exchange-id :accessor exchange-id :initform nil 
 		:subelement (simple-text-element :alias "ExchangeId"))
+   (quantity-restriction :accessor quantity-restriction :initform nil
+			 :subelement (quantity-restriction :alias "QuantityRestriction"))
    (quantity :accessor quantity :initform nil
 	     :subelement (numerical-text-element :alias "Quantity"))
    (eligible-for-saver-shipping :accessor eligible-for-saver-shipping? :initform nil
 				:subelement (yes-no-element :alias "IsEligibleForSuperSaverShipping")))
    (:metaclass element-class)
   (:documentation "Summary of offers for a particular item"))
+
+(defclass quantity-restriction ()
+  ((limit :accessor quantity-restriction-limit :initform nil
+	  :subelement (numerical-text-element :alias "QuantityLimit")))
+  (:metaclass element-class)
+  (:documentation "max # of items that can be bought by a single user"))
 
 (defclass availability-attributes ()
   ((availability-type :accessor availability-type :initform nil :initarg :availability-type
@@ -615,13 +740,15 @@
 (defgeneric official-amazon-offer? (offer)
   (:documentation "Returns whether or not the offer is an official amazon offer."))
 
+(defun official-amazon.com-merchant? (merchant)
+  "Returns True if the given merchant is the Amazon.com itself (not a 3rd party merchant)."
+  (when (and merchant
+	     (member (merchant-id merchant) '("ATVPDKIKX0DER" "Amazon") :test #'string-equal))
+    t))
+			   ))
 (defmethod official-amazon-offer? ((offer offer))
   (let ((merchant (offer-merchant offer)))
-    (and merchant
-	 (or (string-equal (merchant-id merchant)
-			   "ATVPDKIKX0DER")
-	     (string-equal (merchant-id merchant)
-			   "Amazon")))))
+    (and merchant (official-amazon.com-merchant? merchant))))
 
 (defgeneric item-official-amazon-offer  (item)
   (:documentation "Returns the first official amazon offer for the item."))
