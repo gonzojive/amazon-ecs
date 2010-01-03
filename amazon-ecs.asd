@@ -12,6 +12,7 @@
 	       (:file "ecs-response-model" :depends-on ("package" ))
 	       (:file "generate-uri" :depends-on ("package"))
 	       (:file "query-ecs" :depends-on ("ecs-response-model" "generate-uri"))
-	       (:file "operations" :depends-on ("ecs-response-model" "generate-uri" "query-ecs")))
+	       (:file "operations" :depends-on ("ecs-response-model" "generate-uri" "query-ecs"))
+	       (:file "mux-itemlookup" :depends-on ("operations")))
   :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma" "ironclad"
 			  "hunchentoot" "bordeaux-threads" "alexandria"))

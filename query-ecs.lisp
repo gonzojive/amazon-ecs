@@ -12,6 +12,11 @@
     (values (first (response-items parsed-query-root))
 	    parsed-query-root)))
 
+(defun cart-create (&rest op-params)
+  (let ((parsed-query-root (apply 'perform-operation :cart-create op-params)))
+    (values (response-cart parsed-query-root)
+	    parsed-query-root)))
+
 ;(find-class 'item-lookup-response)
 (defparameter *last-request-time* (get-universal-time))
 (defparameter *request-lock* (bordeaux-threads:make-lock "amazon-http-requester"))

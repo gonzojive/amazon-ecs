@@ -5,7 +5,16 @@
 	   #:abstract-root-response
 	   #:actors
 	   #:alternate-versions
+	   #:alternate-version-asin
+	   #:alternate-version-binding
+	   #:alternate-version-title
+
+	   ;;; Conditions
+	   #:amazon-condition
 	   #:amazon-error
+	   #:invalid-parameter-value-error
+	   #:no-exact-matches-error
+
 	   #:amazon-errors
 	   #:amazon-item
 	   #:amazon-query-component
@@ -23,6 +32,12 @@
 	   #:aws-key
 	   #:base-ecs-url
 	   #:binding
+
+	   #:cart-create
+	   #:cart-create-response
+	   #:response-cart
+	   #:cart-purchase-url
+
 	   #:category
 	   #:code
 	   #:condition-note
@@ -269,6 +284,9 @@
 
 	   #:perform-operation
 	   #:perform-batch-operation
+	   
+	   ;; multiplexed requests
+	   #:multiplexed-batch-item-lookup
 	   ))
 
 (in-package :org.iodb.amazon.ecs)

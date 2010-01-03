@@ -1,5 +1,13 @@
 (in-package :org.iodb.amazon.ecs)
 
+;;; Conditions
+(define-condition amazon-condition ()
+  ())
+
+(define-condition amazon-error (amazon-condition error)
+  ((amazon-code :initform nil :initarg :code)
+   (amazon-message :initform nil :initarg :amazon-message)))
+
 ;;;; Class definitions for AWS responses ;;;;
 
 ;;; elementary element classes that get reused in a lot of places
@@ -178,9 +186,20 @@
   ((is-valid :accessor request-is-valid? :initform nil
 		 :subelement (yes-no-element :alias "IsValid"))
    (create-request :accessor cart-create-request :initform nil
-		   :subelement (cart-create-request :alias "CartCreateRequest")))
+		   :subelement (cart-create-request :alias "CartCreateRequest"))
+   (errors :accessor cart-request-errors :initform nil
+	   :subelement (cart-request-errors :alias "Errors")))
   (:metaclass element-class)
   (:documentation "OperationResponse element in Amazon ECS response"))
+
+(defclass cart-request-errors ()
+  ((errors :accessor cart-request-errors :initform nil
+	   :subelement (amazon-error-element :alias "Error" :multiple t)))
+  (:metaclass element-class))
+
+(defclass cart-request-error ()
+  ()
+  (:metaclass element-class))
 
 (defclass cart-create-request ()
   ((cart-items :initform nil :accessor cart-items
@@ -256,17 +275,32 @@
 
 (defclass items-errors ()
   ((errors :accessor errors :initform nil
-	   :subelement (amazon-error :alias "Error" :multiple t)))
+	   :subelement (amazon-error-element :alias "Error" :multiple t)))
   (:metaclass element-class)
   (:documentation "Errors related to searching for or looking up items."))
 
-(defclass amazon-error ()
+(defclass amazon-error-element ()
   ((code :accessor error-code :initform nil
 	 :subelement (simple-text-element :alias "Code"))
    (message :accessor error-message :initform nil
 	    :subelement (simple-text-element :alias "Message")))
   (:metaclass element-class)
   (:documentation "Errors related to searching for or looking up items."))
+
+(define-condition invalid-parameter-value-error (amazon-error)
+  ())
+
+(define-condition no-exact-matches-error (amazon-error)
+  ())
+
+
+(defmethod xml-mop:element-value ((elem amazon-error-element))
+  (error (cond
+	   ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
+	   ((string= "AWS.ECommerceService.NoExactMatches"(error-code elem)) 'no-exact-matches-error)
+	   (t 'amazon-error))
+	 :code (error-code elem) 
+	 :amazon-message (error-message elem)))
 
 (defclass item-search-request ()
   ((product-condition :accessor product-condition :initform nil :initarg :product-condition
@@ -745,7 +779,7 @@
   (when (and merchant
 	     (member (merchant-id merchant) '("ATVPDKIKX0DER" "Amazon") :test #'string-equal))
     t))
-			   ))
+			   
 (defmethod official-amazon-offer? ((offer offer))
   (let ((merchant (offer-merchant offer)))
     (and merchant (official-amazon.com-merchant? merchant))))
