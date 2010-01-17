@@ -7,7 +7,7 @@
   :description "Amazon E-Commerce Service Library"
   :version "0.2.0"
   :author "Red Daly <reddaly at gmail>"
-  :license "GPL version 2: http://www.gnu.org/licenses/gpl.html"
+  :license "LLGPL (Lisp LGPL)"
   :components ((:file "package")
 	       (:file "ecs-response-model" :depends-on ("package" ))
 	       (:file "generate-uri" :depends-on ("package"))
@@ -16,3 +16,6 @@
 	       (:file "mux-itemlookup" :depends-on ("operations")))
   :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma" "ironclad"
 			  "hunchentoot" "bordeaux-threads" "alexandria"))
+
+(setf (asdf:component-property (asdf:find-system :amazon-ecs) :website)
+      "http://github.com/gonzojive/amazon-ecs")
