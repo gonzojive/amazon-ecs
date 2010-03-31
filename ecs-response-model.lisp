@@ -347,7 +347,7 @@
 (define-condition item-not-eligible-for-cart-error (cart-error)
   ())
 
-(define-condition item-already-in-cart-cart-error (cart-error)
+(define-condition item-already-in-cart-error (cart-error)
   ())
 
 
@@ -358,18 +358,19 @@
         ((string= "AWS.ECommerceService.NoExactMatches" (error-code elem)) 'no-exact-matches-error)
         ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
          'item-not-eligible-for-cart-error)
-        ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
-         'item-not-eligible-for-cart-error)
         ((string= "AWS.ECommerceService.ItemAlreadyInCart" (error-code elem))
-         'item-already-in-cart-cart-error)
+         'item-already-in-cart-error)
         (t 'amazon-error))
     
     (funcall (or wrapper #'funcall)
              (lambda ()
-               (apply #'cerror condition-symbol
-                      :code (error-code elem) 
-                      :amazon-message (error-message elem)
-                      extra-keyargs)))))
+               (restart-case 
+                   (apply #'error condition-symbol
+                          :code (error-code elem) 
+                          :amazon-message (error-message elem)
+                          extra-keyargs)
+                 (continue ()
+                   elem))))))
 
 (defclass item-search-request ()
   ((product-condition :accessor product-condition :initform nil :initarg :product-condition
