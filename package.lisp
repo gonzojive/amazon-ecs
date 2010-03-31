@@ -14,7 +14,7 @@
 	   #:amazon-error
            #:cart-error
            #:item-not-eligible-for-cart-error
-           #:item-already-in-cart-cart-error
+           #:item-already-in-cart--error
 	   #:invalid-parameter-value-error
 	   #:no-exact-matches-error
 
@@ -276,6 +276,7 @@
 	   #:item-lookup
 ;	   #:parse-response-stream
 ;	   #:perform-amazon-search
+           #:*amazon.com-merchant-id*
 	   #:official-amazon.com-merchant?
 	   #:official-amazon-offer?
 	   #:item-official-amazon-offer

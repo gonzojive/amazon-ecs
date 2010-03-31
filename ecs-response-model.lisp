@@ -331,7 +331,8 @@
   ((code :accessor error-code :initform nil
 	 :subelement (simple-text-element :alias "Code"))
    (message :accessor error-message :initform nil
-	    :subelement (simple-text-element :alias "Message")))
+	    :subelement (simple-text-element :alias "Message"))
+   (suppressed? :accessor error-suppressed? :initform nil))
   (:metaclass element-class)
   (:documentation "Errors related to searching for or looking up items."))
 
@@ -352,25 +353,27 @@
 
 
 (defmethod xml-mop:element-value ((elem amazon-error-element))
-  (multiple-value-bind (condition-symbol extra-keyargs wrapper)
-      (cond
-        ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
-        ((string= "AWS.ECommerceService.NoExactMatches" (error-code elem)) 'no-exact-matches-error)
-        ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
-         'item-not-eligible-for-cart-error)
-        ((string= "AWS.ECommerceService.ItemAlreadyInCart" (error-code elem))
-         'item-already-in-cart-error)
-        (t 'amazon-error))
+  (unless (error-suppressed? elem)         
+    (multiple-value-bind (condition-symbol extra-keyargs wrapper)
+        (cond
+          ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
+          ((string= "AWS.ECommerceService.NoExactMatches" (error-code elem)) 'no-exact-matches-error)
+          ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
+           'item-not-eligible-for-cart-error)
+          ((string= "AWS.ECommerceService.ItemAlreadyInCart" (error-code elem))
+           'item-already-in-cart-error)
+          (t 'amazon-error))
     
-    (funcall (or wrapper #'funcall)
-             (lambda ()
-               (restart-case 
-                   (apply #'error condition-symbol
-                          :code (error-code elem) 
-                          :amazon-message (error-message elem)
-                          extra-keyargs)
-                 (continue ()
-                   elem))))))
+      (funcall (or wrapper #'funcall)
+               (lambda ()
+                 (restart-case 
+                     (apply #'error condition-symbol
+                            :code (error-code elem) 
+                            :amazon-message (error-message elem)
+                            extra-keyargs)
+                   (continue ()
+                     (setf (error-suppressed? elem) t)
+                     elem)))))))
 
 (defclass item-search-request ()
   ((product-condition :accessor product-condition :initform nil :initarg :product-condition
@@ -854,6 +857,8 @@
   (when (and merchant
 	     (member (merchant-id merchant) '("ATVPDKIKX0DER" "Amazon") :test #'string-equal))
     t))
+
+(defparameter *amazon.com-merchant-id* "ATVPDKIKX0DER")
 			   
 (defmethod official-amazon-offer? ((offer offer))
   (let ((merchant (offer-merchant offer)))
