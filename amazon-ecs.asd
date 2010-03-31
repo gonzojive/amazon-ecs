@@ -4,8 +4,8 @@
 (in-package :org.iodb.amazon.ecs-system)
 
 (defsystem :amazon-ecs
-  :description "Amazon E-Commerce Service Library"
-  :version "0.2.0"
+  :description "Amazon Product Advertising API library for Common Lisp"
+  :version "0.2.1"
   :author "Red Daly <reddaly at gmail>"
   :license "LLGPL (Lisp LGPL)"
   :components ((:file "package")

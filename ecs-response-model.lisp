@@ -1,5 +1,14 @@
 (in-package :org.iodb.amazon.ecs)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defmacro define-chained-accessors ((from-class relation) &body accessors)
+    `(progn
+       ,@(mapcar (lambda (accessor)
+                   (let ((obj-var (gensym "object")))
+                     `(defmethod ,accessor ((,obj-var ,from-class))
+                                 (,accessor (,relation ,obj-var)))))
+                 accessors))))
+
 ;;; Conditions
 (define-condition amazon-condition ()
   ())
@@ -82,7 +91,7 @@
 (defmethod price-in-dollars ((price price-element))
   (/ (price-in-cents price) 100))
 (defmethod price-as-string ((price price-element))
-  (format t "$~,2F" (price-in-dollars price)))
+  (format nil "$~,2F" (price-in-dollars price)))
 
 (defclass location-element ()
   ((country-code :accessor location-country-code :initform nil :initarg :country-code
@@ -131,6 +140,21 @@
   (:metaclass element-class)
   (:tags ("CartCreateResponse"))
   (:documentation "root of item lookup responses"))
+
+
+(defclass cart-add-response (abstract-root-response)
+  ((cart :initform nil :accessor response-cart :initarg :cart
+	 :subelement (cart :alias "Cart")))
+  (:metaclass element-class)
+  (:tags ("CartAddResponse"))
+  (:documentation "root of cart add responses"))
+
+(defclass cart-modify-response (abstract-root-response)
+  ((cart :initform nil :accessor response-cart :initarg :cart
+	 :subelement (cart :alias "Cart")))
+  (:metaclass element-class)
+  (:tags ("CartModifyResponse"))
+  (:documentation "root of cart modify responses"))
 
 (defclass cart ()
   ((request :initform nil :accessor cart-request :initarg :request
@@ -187,6 +211,10 @@
 		 :subelement (yes-no-element :alias "IsValid"))
    (create-request :accessor cart-create-request :initform nil
 		   :subelement (cart-create-request :alias "CartCreateRequest"))
+   (add-request :accessor cart-add-request :initform nil
+                :subelement (cart-add-request :alias "CartAddRequest"))
+   (modify-request :accessor cart-modify-request :initform nil
+                :subelement (cart-modify-request :alias "CartModifyRequest"))
    (errors :accessor cart-request-errors :initform nil
 	   :subelement (cart-request-errors :alias "Errors")))
   (:metaclass element-class)
@@ -206,6 +234,24 @@
 	       :subelement (cart-request-items :alias "Items")))
   (:metaclass element-class))
 
+(defclass cart-add-request ()
+  ((cart-items :initform nil :accessor cart-items
+	       :subelement (cart-request-items :alias "Items"))
+   (hmac :initform nil :accessor cart-request-hmac
+         :subelement (simple-text-element :alias "HMAC"))
+   (cart-id :initform nil :accessor cart-request-cart-id
+            :subelement (simple-text-element :alias "CartId")))
+  (:metaclass element-class))
+
+(defclass cart-modify-request ()
+  ((cart-items :initform nil :accessor cart-items
+	       :subelement (cart-request-items :alias "Items"))
+   (hmac :initform nil :accessor cart-request-hmac
+         :subelement (simple-text-element :alias "HMAC"))
+   (cart-id :initform nil :accessor cart-request-cart-id
+            :subelement (simple-text-element :alias "CartId")))
+  (:metaclass element-class))
+
 (defclass cart-request-items ()
   ((items :initform nil :accessor items
 	  :subelement (cart-request-item :alias "Item" :multiple t)))
@@ -220,7 +266,9 @@
    (offer-listing-id :accessor item-offer-listing-id :initform nil :initarg :offer-listing-id
 	 :subelement (simple-text-element :alias "OfferListingId"))
    (quantity :accessor item-quantity :initform nil
-	     :subelement (numerical-text-element :alias "Quantity")))
+	     :subelement (numerical-text-element :alias "Quantity"))
+   (cart-item-id :accessor item-cart-item-id :initform nil :initarg :cart-item-id
+	 :subelement (simple-text-element :alias "CartItemId")))
   (:metaclass element-class))
 
 (defclass operation-request ()
@@ -293,14 +341,35 @@
 (define-condition no-exact-matches-error (amazon-error)
   ())
 
+(define-condition cart-error (amazon-error)
+  ())
+
+(define-condition item-not-eligible-for-cart-error (cart-error)
+  ())
+
+(define-condition item-already-in-cart-cart-error (cart-error)
+  ())
+
 
 (defmethod xml-mop:element-value ((elem amazon-error-element))
-  (error (cond
-	   ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
-	   ((string= "AWS.ECommerceService.NoExactMatches"(error-code elem)) 'no-exact-matches-error)
-	   (t 'amazon-error))
-	 :code (error-code elem) 
-	 :amazon-message (error-message elem)))
+  (multiple-value-bind (condition-symbol extra-keyargs wrapper)
+      (cond
+        ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
+        ((string= "AWS.ECommerceService.NoExactMatches" (error-code elem)) 'no-exact-matches-error)
+        ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
+         'item-not-eligible-for-cart-error)
+        ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
+         'item-not-eligible-for-cart-error)
+        ((string= "AWS.ECommerceService.ItemAlreadyInCart" (error-code elem))
+         'item-already-in-cart-cart-error)
+        (t 'amazon-error))
+    
+    (funcall (or wrapper #'funcall)
+             (lambda ()
+               (apply #'cerror condition-symbol
+                      :code (error-code elem) 
+                      :amazon-message (error-message elem)
+                      extra-keyargs)))))
 
 (defclass item-search-request ()
   ((product-condition :accessor product-condition :initform nil :initarg :product-condition
@@ -498,6 +567,16 @@
 (defclass item-attributes (item-price-description-mixin)
   ((authors :accessor item-authors :initform nil :initarg :authors
 	    :subelement (simple-text-element :alias "Author" :multiple t))
+   (brand :accessor item-brand :initform nil :initarg :brand
+          :subelement (simple-text-element :alias "Brand"))
+   (size :accessor item-size :initform nil :initarg :size
+         :subelement (simple-text-element :alias "Size"))
+   (package-quantity :accessor item-package-quantity :initform nil :initarg :size
+         :subelement (numerical-text-element :alias "PackageQuantity"))
+   (autographed? :accessor item-autographed? :initform nil :initarg :autographed?
+	    :subelement (yes-no-element :alias "IsAutographed"))
+   (memorabilia? :accessor item-memorabilia? :initform nil :initarg :memorabilia?
+	    :subelement (yes-no-element :alias "IsMemorabilia"))
    (features :accessor item-features :initform nil :initarg :features
 	    :subelement (simple-text-element :alias "Feature" :multiple t))
    (height :accessor item-height :initform nil :initarg :height
@@ -514,6 +593,8 @@
 	       :subelement (price-element :alias "ListPrice"))
    (title :accessor item-title :initform nil
 	  :subelement (simple-text-element :alias "Title"))
+   (mpn :accessor item-mpn :initform nil
+	:subelement (simple-text-element :alias "MPN"))
    (upc :accessor item-upc :initform nil
 	:subelement (simple-text-element :alias "UPC"))
    (ean :accessor item-ean :initform nil
@@ -724,13 +805,6 @@
 
 
 
-(defmacro define-chained-accessors ((from-class relation) &body accessors)
-  `(progn
-     ,@(mapcar (lambda (accessor)
-		 (let ((obj-var (gensym "object")))
-		   `(defmethod ,accessor ((,obj-var ,from-class))
-		      (,accessor (,relation ,obj-var)))))
-	       accessors)))
 
 (define-chained-accessors (offer offer-attributes)
     offer-condition condition-note will-ship-expedited will-ship-international subcondition)

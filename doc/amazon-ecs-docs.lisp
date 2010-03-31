@@ -8,10 +8,16 @@
     (:title "amazon-ecs")
     (:systems :amazon-ecs); :cl-tidy.doc)
     (:content
-     "#### Amazon Advertising API library for Common Lisp
+     "#### Amazon Product Advertising API library for Common Lisp
 
-## Synopsis
-
+This library provides a Common Lisp interface to the [Amazon Product
+ Advertising
+ API](https://affiliate-program.amazon.com/gp/advertising/api/detail/main.html).
+ `amazon-ecs` provides most of the useful features documented in the
+ Amazon documentation but requires little knowledge of the
+ idosyncrasies of the RESTful protocol used to communicate with
+ Amazon's servers.  To the lisp user, interaction occurs using
+ synchronous function calls that return decorated CLOS objects.
 ")
 
     (:sections
@@ -24,6 +30,10 @@ obtain the library, use the following command:
 
 You can also browse the code at [http://github.com/gonzojive/amazon-ecs](http://github.com/gonzojive/amazon-ecs).
 "))
+     (defdoc guide :section
+       (:title "User Guide")
+       (:content "")
+       )
      (defdoc functions :section
        (:title "Operations for querying Amazon.com")
        (:content "The following methods make requests to ")

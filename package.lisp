@@ -12,6 +12,9 @@
 	   ;;; Conditions
 	   #:amazon-condition
 	   #:amazon-error
+           #:cart-error
+           #:item-not-eligible-for-cart-error
+           #:item-already-in-cart-cart-error
 	   #:invalid-parameter-value-error
 	   #:no-exact-matches-error
 
@@ -28,6 +31,10 @@
 	   #:author
 	   #:authors
 	   #:availability
+           #:availability-attributes
+           #:availability-type
+           #:availability-maximum-hours
+           #:availability-minimum-hours
 	   #:average-feedback-rating
 	   #:aws-key
 	   #:base-ecs-url
@@ -37,6 +44,14 @@
 	   #:cart-create-response
 	   #:response-cart
 	   #:cart-purchase-url
+           #:cart-item
+           #:cart-item-id
+           #:cart-item-collection
+           #:cart-items
+           #:cart-item-seller-id
+           #:cart-item-merchant-id
+           #:cart-item-asin
+
 
 	   #:category
 	   #:code
