@@ -7,6 +7,14 @@
 	:for index :from 0 :upto (- end 1)
 	:collect item))
 
+(defun partition-list (list max-chunk-size)
+  "Partitions list into a number of chunks, sized at most
+MAX-CHUNK-SIZE.  All elements are crammed into lists of size
+MAX-CHUNK-SIZE except for the last."
+  (loop :for tail :on list :by (lambda (x) (nthcdr max-chunk-size x))
+        :for sublist = (soft-sublist tail max-chunk-size)
+        :collect sublist))
+
 (defun multiplexed-batch-item-lookup (asins &key shared-parameters-args independent-parameters-args)
   "Given a list of items and shared/independent paramters for a batch
 request, returns a list where the nth item of the list is a list of
@@ -18,15 +26,18 @@ e.g. (ecs:multiplexed-batch-item-lookup '(\"0321486129\" \"0131873210\") ...) =>
  \(#<ORG.IODB.AMAZON.ECS:AMAZON-ITEM 0131873210>
   #<ORG.IODB.AMAZON.ECS:AMAZON-ITEM 0131873210>\)\)
 "
-  (loop :for ten-asins :on asins :by (lambda (x) (soft-sublist (nthcdr 10 x) 10))
-	:append  (when-let ((response-items-collections (response-items
-							 (perform-batch-operation
-							  :item-lookup
-							  :shared-parameters-args `(:item-id ,(format nil "~{~A~^,~}" ten-asins)
-											     ,@shared-parameters-args)
-							  :independent-parameters-args independent-parameters-args))))
-		   (apply #'mapcar #'list
-			  (mapcar  #'items response-items-collections)))))
+  (declare (optimize (debug 3)))
+  (mapcan #'(lambda (ten-asins)
+              (when-let ((response-items-collections
+                          (response-items
+                           (perform-batch-operation
+                            :item-lookup
+                            :shared-parameters-args `(:item-id ,(format nil "~{~A~^,~}" ten-asins)
+                                                               ,@shared-parameters-args)
+                            :independent-parameters-args independent-parameters-args))))
+                (apply #'mapcar #'list
+                       (mapcar  #'items response-items-collections))))
+          (partition-list asins 10)))
 
 
 ;;; In an ItemLookup request, you can include a list of up to ten

@@ -86,6 +86,11 @@ where key-string defaults to the hyphen->camelized version of the symbol-name of
                   response-group merge-cart cart-id
                   (hmac :key-string "HMAC")))
 
+(defop :cart-get ((items :key-string "Item" :listp t)
+                  &optional
+                  response-group merge-cart cart-id
+                  (hmac :key-string "HMAC")))
+
 (defop :cart-modify ((items :key-string "Item" :listp t)
                      &optional
                      response-group merge-cart cart-id

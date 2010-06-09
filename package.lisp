@@ -17,6 +17,7 @@
            #:item-already-in-cart--error
 	   #:invalid-parameter-value-error
 	   #:no-exact-matches-error
+           #:item-not-accessible-error
 
 	   #:amazon-errors
 	   #:amazon-item
@@ -297,6 +298,7 @@
 	   #:cart-add
 	   #:cart-clear
 	   #:cart-modify
+           #:cart-get
 
 	   #:perform-operation
 	   #:perform-batch-operation

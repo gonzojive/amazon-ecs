@@ -17,6 +17,18 @@
   ((amazon-code :initform nil :initarg :code)
    (amazon-message :initform nil :initarg :amazon-message)))
 
+(defparameter *amazon-code->condition-map* (make-hash-table :test 'equal)
+  "Maps AMAZON-CODE strings to amazon-condition symbols.")
+
+(defmacro define-amazon-error (name code &body define-condition-body)
+  `(progn
+     (setf (gethash ,code *amazon-code->condition-map*) ',name)
+     (define-condition ,name (amazon-error)
+       ,@define-condition-body)))
+
+(define-amazon-error item-not-accessible "AWS.ECommerceService.ItemNotAccessible" 
+  ())
+
 ;;;; Class definitions for AWS responses ;;;;
 
 ;;; elementary element classes that get reused in a lot of places
@@ -79,7 +91,7 @@
 
 (defmethod print-object ((obj price-element) stream)
   (print-unreadable-object (obj stream :type t :identity nil)
-    (write-sequence (price-formatted obj) stream)))
+    #+nil(write-sequence (price-formatted obj) stream)))
 
 (defgeneric price-in-cents (price &key currency-code))
 (defgeneric price-in-dollars (price))
@@ -156,6 +168,14 @@
   (:tags ("CartModifyResponse"))
   (:documentation "root of cart modify responses"))
 
+
+(defclass cart-get-response (abstract-root-response)
+  ((cart :initform nil :accessor response-cart :initarg :cart
+	 :subelement (cart :alias "Cart")))
+  (:metaclass element-class)
+  (:tags ("CartGetResponse"))
+  (:documentation "root of cart modify responses"))
+
 (defclass cart ()
   ((request :initform nil :accessor cart-request :initarg :request
 	 :subelement (cart-request :alias "Request"))
@@ -215,6 +235,8 @@
                 :subelement (cart-add-request :alias "CartAddRequest"))
    (modify-request :accessor cart-modify-request :initform nil
                 :subelement (cart-modify-request :alias "CartModifyRequest"))
+   (get-request :accessor cart-get-request :initform nil
+                :subelement (cart-get-request :alias "CartGetRequest"))
    (errors :accessor cart-request-errors :initform nil
 	   :subelement (cart-request-errors :alias "Errors")))
   (:metaclass element-class)
@@ -244,6 +266,15 @@
   (:metaclass element-class))
 
 (defclass cart-modify-request ()
+  ((cart-items :initform nil :accessor cart-items
+	       :subelement (cart-request-items :alias "Items"))
+   (hmac :initform nil :accessor cart-request-hmac
+         :subelement (simple-text-element :alias "HMAC"))
+   (cart-id :initform nil :accessor cart-request-cart-id
+            :subelement (simple-text-element :alias "CartId")))
+  (:metaclass element-class))
+
+(defclass cart-get-request ()
   ((cart-items :initform nil :accessor cart-items
 	       :subelement (cart-request-items :alias "Items"))
    (hmac :initform nil :accessor cart-request-hmac
@@ -351,11 +382,15 @@
 (define-condition item-already-in-cart-error (cart-error)
   ())
 
+(define-condition item-not-accessible-error (amazon-error)
+  ())
+
 
 (defmethod xml-mop:element-value ((elem amazon-error-element))
   (unless (error-suppressed? elem)         
     (multiple-value-bind (condition-symbol extra-keyargs wrapper)
         (cond
+          ((string= "AWS.ECommerceService.ItemNotAccessible" (error-code elem)) 'item-not-accessible-error)
           ((string= "AWS.InvalidParameterValue" (error-code elem)) 'invalid-parameter-value-error)
           ((string= "AWS.ECommerceService.NoExactMatches" (error-code elem)) 'no-exact-matches-error)
           ((string= "AWS.ECommerceService.ItemNotEligibleForCart" (error-code elem))
@@ -382,6 +417,8 @@
 	     :subelement (simple-text-element :alias "DeliveryMethod"))
    (keywords :accessor keywords :initform nil :initarg :keywords
 	     :subelement (simple-text-element :alias "Keywords"))
+   (browse-node :accessor browse-node :initform nil :initarg :browse-node
+                :subelement (simple-text-element :alias "BrowseNode"))
    (title :accessor request-title :initform nil :initarg :title
 	     :subelement (simple-text-element :alias "Title"))
    (author :accessor request-author :initform nil :initarg :author

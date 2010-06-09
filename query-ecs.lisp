@@ -38,6 +38,14 @@
     (values (response-cart parsed-query-root)
 	    parsed-query-root)))
 
+
+(defun cart-get (cart-or-cart-id &rest op-params)
+  (let* ((parsed-query-root (apply 'perform-operation :cart-get
+                                   (append (extra-keys-from-cart-or-cart-id cart-or-cart-id)
+                                           op-params))))
+    (values (response-cart parsed-query-root)
+	    parsed-query-root)))
+
 ;(find-class 'item-lookup-response)
 (defparameter *last-request-time* (get-universal-time))
 (defparameter *request-lock* (bordeaux-threads:make-lock "amazon-http-requester"))
@@ -59,8 +67,12 @@ and avoids sending at more than 1 per second."
     (bordeaux-threads:release-lock *request-lock*)))
 
 (defparameter *default-possible-root-elements*
-  (mapcar #'find-class '(item-lookup-response item-search-response 
-                         cart-create-response cart-add-response cart-modify-response)))
+  (mapcar #'find-class '(item-lookup-response
+                         item-search-response 
+                         cart-create-response 
+                         cart-add-response
+                         cart-modify-response
+                         cart-get-response)))
 
 (defun amazon-request-and-parse (&key
 				 parameters
