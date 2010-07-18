@@ -4,12 +4,12 @@
 
 (defun item-lookup (&rest op-params)
   (let ((parsed-query-root (apply 'perform-operation :item-lookup op-params)))
-    (values (first (response-items parsed-query-root))
+    (values (when parsed-query-root (first (response-items parsed-query-root)))
 	    parsed-query-root)))
 
 (defun item-search (&rest op-params)
   (let ((parsed-query-root (apply 'perform-operation :item-search op-params)))
-    (values (first (response-items parsed-query-root))
+    (values (when parsed-query-root (first (response-items parsed-query-root)))
 	    parsed-query-root)))
 
 (defun cart-create (&rest op-params)

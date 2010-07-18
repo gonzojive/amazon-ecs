@@ -8,12 +8,14 @@
   :version "0.2.1"
   :author "Red Daly <reddaly at gmail>"
   :license "LLGPL (Lisp LGPL)"
-  :components ((:file "package")
-	       (:file "ecs-response-model" :depends-on ("package" ))
-	       (:file "generate-uri" :depends-on ("package"))
-	       (:file "query-ecs" :depends-on ("ecs-response-model" "generate-uri"))
-	       (:file "operations" :depends-on ("ecs-response-model" "generate-uri" "query-ecs"))
-	       (:file "mux-itemlookup" :depends-on ("operations")))
+  :components ((:module "src"
+                        :components
+                        ((:file "package")
+                         (:file "ecs-response-model" :depends-on ("package" ))
+                         (:file "generate-uri" :depends-on ("package"))
+                         (:file "query-ecs" :depends-on ("ecs-response-model" "generate-uri"))
+                         (:file "operations" :depends-on ("ecs-response-model" "generate-uri" "query-ecs"))
+                         (:file "mux-itemlookup" :depends-on ("operations")))))
   :depends-on ("cl-ppcre" "trivial-http" "net-telent-date" "xml-mop" "parse-number" "drakma" "ironclad"
 			  "hunchentoot" "bordeaux-threads" "alexandria"))
 

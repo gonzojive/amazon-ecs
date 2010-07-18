@@ -144,6 +144,7 @@
 	   #:item-product-group
 	   #:item-publication-date
 	   #:item-publisher
+	   #:item-sales-rank
 	   #:item-search-request
 	   #:item-search-response
 	   #:item-small-image

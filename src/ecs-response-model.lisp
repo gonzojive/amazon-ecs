@@ -483,7 +483,7 @@
    (asin :accessor item-asin :initform "" :initarg :asin :subelement (simple-text-element :alias "ASIN"))
    (detail-page-url :accessor item-detail-page-url :initform "" :initarg :detail-page-url
 		    :subelement (simple-text-element :alias "DetailPageURL"))
-   (sales-rank :initform 0 :subelement (numerical-text-element :alias "SalesRank"))
+   (sales-rank :initform 0 :subelement (numerical-text-element :alias "SalesRank") :accessor item-sales-rank)
    (large-image :initform nil :subelement (image-element :alias "LargeImage") :accessor item-large-image)
    (small-image :initform nil :subelement (image-element :alias "SmallImage") :accessor item-small-image)
    (medium-image :initform nil :subelement (image-element :alias "MediumImage") :accessor item-medium-image)
@@ -588,11 +588,11 @@
 (defclass offer-summary (item-price-description-mixin)
   ((totalnew :accessor summary-total-new :initform nil :initarg :total-new
 	     :subelement (numerical-text-element :alias "TotalNew"))
-   (total-used :accessor lowest-used-price :initform nil :initarg :total-used
+   (total-used :accessor total-used :initform nil :initarg :total-used
 	       :subelement (numerical-text-element :alias "TotalUsed"))
-   (total-collectible :accessor lowest-used-price :initform nil :initarg :total-collectible
+   (total-collectible :accessor total-collectible :initform nil :initarg :total-collectible
 		      :subelement (numerical-text-element :alias "TotalCollectible"))
-   (total-refurbished :accessor lowest-used-price :initform nil :initarg :total-refurbished
+   (total-refurbished :accessor total-refurbished :initform nil :initarg :total-refurbished
 		      :subelement (numerical-text-element :alias "TotalRefurbished")))
   (:metaclass element-class)
   (:tags ("OfferSummary"))
