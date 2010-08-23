@@ -683,6 +683,8 @@
 		  :subelement (simple-text-element :alias "ProductGroup"))
    (product-type-name :accessor item-product-type-name :initform nil
 		      :subelement (simple-text-element :alias "ProductTypeName"))
+   (legal-disclaimer :accessor item-legal-disclaimer :initform nil
+                     :subelement (simple-text-element :alias "LegalDisclaimer"))
    (languages :accessor item-languages :initform nil
 	      :subelement (languages-collection :alias "Languages"))
    (is-eligible-for-trade-in :accessor item-eligible-for-trade-in :initform nil
@@ -839,6 +841,9 @@
    
    (availability-minimum-hours :accessor availability-minimum-hours :initform nil
 			       :subelement (numerical-text-element :alias "MinimumHours"))
+   
+   (availability-preorder-p :accessor availability-preorder-p :initform nil
+                            :subelement (yes-no-element :alias "IsPreorder"))
    (availability-maximum-hours :accessor availability-maximum-hours :initform nil
 			       :subelement (numerical-text-element :alias "MaximumHours")))
   (:metaclass element-class)
